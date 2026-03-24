@@ -1,0 +1,41 @@
+{
+  "name": "trades-saas",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "setup": "bash scripts/setup.sh",
+    "mock": "node scripts/mock-services.js",
+    "dev:full": "concurrently \"npm run mock\" \"npm run dev\"",
+    "db:reset": "supabase db reset --local",
+    "db:studio": "open http://127.0.0.1:54323",
+    "demo:user": "node scripts/create-demo-user.js",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:status": "supabase status"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.3.0",
+    "@supabase/supabase-js": "^2.43.1",
+    "date-fns": "^3.6.0",
+    "date-fns-tz": "^3.1.3",
+    "next": "^14.2.3",
+    "openai": "^4.47.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "resend": "^3.2.0",
+    "twilio": "^5.1.0",
+    "zod": "^3.23.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "concurrently": "^8.2.2",
+    "dotenv": "^16.4.5",
+    "typescript": "^5"
+  }
+}
