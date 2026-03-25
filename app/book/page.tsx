@@ -84,7 +84,7 @@ export default function BookPage() {
         phone: form.phone,
         email: form.email,
         lead_source: 'website',
-      }, { ignoreDuplicates: false })
+      })
       .select('id')
       .single() as any
 
