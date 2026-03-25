@@ -301,7 +301,7 @@ export default function BookPage() {
               <button
                 disabled={!selectedDate || !selectedTime}
                 onClick={() => setStep('details')}
-                style={{ padding:'12px 32px', background: selectedDate && selectedTime ? Y : '#1a1a1a', color: selectedDate && selectedTime ? '#000' : '#333', border:'none', borderRadius:'6px', fontSize:'15px', fontWeight:700, cursor: selectedDate && selectedTime ? 'pointer' : 'not-allowed', fontFamily:'DM Sans', transition:'all 0.2s', fontFamily:'Barlow Condensed', textTransform:'uppercase', letterSpacing:'0.08em' }}>
+                style={{ padding:'12px 32px', background: selectedDate && selectedTime ? Y : '#1a1a1a', color: selectedDate && selectedTime ? '#000' : '#333', border:'none', borderRadius:'6px', fontSize:'15px', fontWeight:700, cursor: selectedDate && selectedTime ? 'pointer' : 'not-allowed', fontFamily:'Barlow Condensed', transition:'all 0.2s', textTransform:'uppercase', letterSpacing:'0.08em' }}>
                 Continue →
               </button>
             </div>
