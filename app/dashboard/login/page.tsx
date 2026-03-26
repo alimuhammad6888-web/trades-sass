@@ -102,7 +102,9 @@ export default function LoginPage() {
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
-
+<a href="/dashboard/forgot-password" style={{ fontSize:'12px', color:'#9a9590', textDecoration:'none', display:'block', textAlign:'center', marginTop:'16px' }}>
+  Forgot password?
+</a>
         <p style={{ fontSize: '12px', color: '#9a9590', marginTop: '20px', textAlign: 'center' }}>
           Demo: owner@demo.com / Demo1234!
         </p>
