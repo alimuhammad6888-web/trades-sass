@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import { useTenant } from '@/lib/tenant-context'
 import { useThemeTokens } from '@/lib/theme'
@@ -15,16 +16,31 @@ const STATUS_STYLES: any = {
   confirmed: { bg:'#e8f5ee', color:'#1a6b4a' },
   completed: { bg:'#eef4fb', color:'#1e4d8c' },
   cancelled: { bg:'#fdf0ef', color:'#8c2820' },
-  no_show:   { bg:'#f5f5f5', color:'#666' },
 }
 
-export default function BookingsPage() {
+function BookingsInner() {
   const { tenant } = useTenant()
   const T = useThemeTokens()
+  const searchParams = useSearchParams()
   const [bookings, setBookings] = useState<any[]>([])
   const [fetched, setFetched]   = useState(false)
   const [filter, setFilter]     = useState('all')
   const [updating, setUpdating] = useState<string|null>(null)
+  const [toast, setToast]       = useState<{msg:string; ok:boolean}|null>(null)
+
+  useEffect(() => {
+    const confirm = searchParams.get('confirm')
+    if (confirm === 'success')   { showToast('✓ Booking confirmed!', true);  setFilter('confirmed') }
+    if (confirm === 'already')   { showToast('This booking was already confirmed.', true) }
+    if (confirm === 'invalid')   { showToast('Invalid confirmation link.', false) }
+    if (confirm === 'notfound')  { showToast('Booking not found.', false) }
+    if (confirm === 'cancelled') { showToast('This booking has been cancelled.', false) }
+  }, [searchParams])
+
+  function showToast(msg: string, ok: boolean) {
+    setToast({ msg, ok })
+    setTimeout(() => setToast(null), 4000)
+  }
 
   useEffect(() => {
     if (!tenant?.id) return
@@ -43,49 +59,68 @@ export default function BookingsPage() {
 
   async function updateStatus(id: string, status: string) {
     setUpdating(id)
-    await supabase.from('bookings').update({ status }).eq('id', id)
+    await supabase.from('bookings').update({
+      status,
+      ...(status === 'confirmed' ? { confirmed_at: new Date().toISOString() } : {}),
+    }).eq('id', id)
     await loadBookings()
     setUpdating(null)
+    if (status === 'confirmed') showToast('✓ Booking confirmed!', true)
   }
 
-  function fmt(iso: string) { return new Date(iso).toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' }) }
+  function fmt(iso: string)     { return new Date(iso).toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' }) }
   function fmtTime(iso: string) { return new Date(iso).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' }) }
-  function fmtPrice(cents: number|null) { return cents ? '$'+(cents/100).toFixed(0) : 'Quote' }
+  function fmtPrice(c: number|null) { return c ? '$'+(c/100).toFixed(0) : 'Quote' }
 
-  const filtered = filter==='all' ? bookings : bookings.filter(b => b.status===filter)
-
-  const btn = (label: string, onClick: ()=>void, variant: 'confirm'|'complete'|'danger'|'restore'|'reopen') => {
-    const styles: any = {
-      confirm:  { bg:'#1a6b4a', color:'#fff', border:'none' },
-      complete: { bg:'#1e4d8c', color:'#fff', border:'none' },
-      danger:   { bg:'transparent', color:'#8c2820', border:'1px solid #8c2820' },
-      restore:  { bg:'transparent', color:'#9a5c10', border:'1px solid #9a5c10' },
-      reopen:   { bg:'transparent', color:'#1e4d8c', border:'1px solid #1e4d8c' },
-    }
-    const s = styles[variant]
-    return (
-      <button onClick={onClick}
-        style={{ padding:'6px 14px', background:s.bg, color:s.color, border:s.border, borderRadius:'6px', fontSize:'12px', fontWeight:500, cursor:'pointer', fontFamily:'sans-serif' }}>
-        {label}
-      </button>
-    )
-  }
+  const filtered = filter === 'all' ? bookings : bookings.filter(b => b.status === filter)
+  const pending  = bookings.filter(b => b.status === 'pending')
 
   return (
     <div style={{ minHeight:'100vh', background:T.bg, fontFamily:'sans-serif', transition:'background 0.2s' }}>
-      <style>{`@keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:0.7} }`}</style>
+      <style>{`
+        @keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:0.7} }
+        @keyframes slideDown { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+      `}</style>
+
+      {/* Toast */}
+      {toast && (
+        <div style={{ position:'fixed', top:'16px', right:'16px', zIndex:200, background:toast.ok?'#1a6b4a':'#8c2820', color:'#fff', padding:'12px 20px', borderRadius:'8px', fontSize:'13px', fontWeight:500, boxShadow:'0 4px 12px rgba(0,0,0,0.2)', animation:'slideDown 0.2s ease' }}>
+          {toast.msg}
+        </div>
+      )}
 
       <div style={{ padding:'20px 20px 0' }}>
         <h1 style={{ fontFamily:'Georgia,serif', fontSize:'22px', fontStyle:'italic', color:T.t1, marginBottom:'4px' }}>Bookings</h1>
         <p style={{ fontSize:'13px', color:T.t3, marginBottom:'16px' }}>Manage and update appointment status</p>
 
-        {/* Filter tabs */}
+        {/* Pending alert */}
+        {fetched && pending.length > 0 && (
+          <div style={{ background:T.isDark?'#2a1a00':'#fef4e0', border:`1px solid ${T.isDark?'#5a3a00':'#f0c060'}`, borderRadius:'8px', padding:'14px 16px', marginBottom:'16px', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'10px', animation:'slideDown 0.3s ease' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+              <div style={{ width:'8px', height:'8px', borderRadius:'50%', background:'#E07B2A', animation:'pulse 1.5s ease infinite', flexShrink:0 }} />
+              <div>
+                <div style={{ fontSize:'14px', fontWeight:600, color:T.isDark?'#F4C300':'#9a5c10' }}>
+                  {pending.length} booking{pending.length > 1 ? 's' : ''} waiting for confirmation
+                </div>
+                <div style={{ fontSize:'12px', color:T.isDark?'#a08030':'#c88020', marginTop:'2px' }}>
+                  Confirm via email link, SMS reply, or click below
+                </div>
+              </div>
+            </div>
+            <button onClick={() => setFilter('pending')}
+              style={{ padding:'6px 14px', background:'#E07B2A', color:'#fff', border:'none', borderRadius:'6px', fontSize:'12px', fontWeight:600, cursor:'pointer', fontFamily:'sans-serif' }}>
+              View pending
+            </button>
+          </div>
+        )}
+
+        {/* Filters */}
         <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
           {['all','pending','confirmed','completed','cancelled'].map(f => (
             <button key={f} onClick={() => setFilter(f)}
               style={{ padding:'6px 14px', borderRadius:'20px', border:`1px solid ${filter===f?T.t1:T.border}`, fontSize:'12px', fontWeight:500, cursor:'pointer', fontFamily:'sans-serif', background:filter===f?T.t1:T.card, color:filter===f?(T.isDark?'#000':'#fff'):T.t2, transition:'all 0.15s' }}>
               {f.charAt(0).toUpperCase()+f.slice(1)}
-              {f!=='all' && <span style={{ marginLeft:'6px', fontSize:'11px', opacity:0.6 }}>{bookings.filter(b=>b.status===f).length}</span>}
+              {f !== 'all' && <span style={{ marginLeft:'6px', fontSize:'11px', opacity:0.6 }}>{bookings.filter(b=>b.status===f).length}</span>}
             </button>
           ))}
         </div>
@@ -96,16 +131,18 @@ export default function BookingsPage() {
           <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
             {[1,2,3].map(i => <div key={i} style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:'8px', height:'90px', animation:'pulse 1.5s ease infinite' }} />)}
           </div>
-        ) : filtered.length===0 ? (
+        ) : filtered.length === 0 ? (
           <div style={{ textAlign:'center', padding:'60px', color:T.t3, background:T.card, border:`1px solid ${T.border}`, borderRadius:'8px' }}>
-            No {filter==='all'?'':filter} bookings yet
+            No {filter === 'all' ? '' : filter} bookings yet
           </div>
         ) : (
           <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
             {filtered.map(b => {
               const sc = STATUS_STYLES[b.status] ?? STATUS_STYLES.pending
+              const isPending = b.status === 'pending'
               return (
-                <div key={b.id} style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:'8px', padding:'16px 20px', transition:'background 0.2s' }}>
+                <div key={b.id} style={{ background:T.card, border:`1px solid ${isPending?'#E07B2A55':T.border}`, borderRadius:'8px', padding:'16px 20px', transition:'background 0.2s', position:'relative' }}>
+                  {isPending && <div style={{ position:'absolute', top:0, left:0, right:0, height:'3px', background:'#E07B2A', borderRadius:'8px 8px 0 0' }} />}
                   <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
                     <div style={{ flex:1, minWidth:'200px' }}>
                       <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'6px', flexWrap:'wrap' }}>
@@ -118,11 +155,16 @@ export default function BookingsPage() {
                       {b.notes && <div style={{ fontSize:'12px', color:T.t3, marginTop:'6px', fontStyle:'italic' }}>Note: {b.notes}</div>}
                     </div>
                     <div style={{ display:'flex', gap:'6px', flexWrap:'wrap', alignItems:'flex-start' }}>
-                      {b.status==='pending'   && btn('Confirm',       () => updateStatus(b.id,'confirmed'), 'confirm')}
-                      {b.status==='confirmed' && btn('Mark complete', () => updateStatus(b.id,'completed'), 'complete')}
-                      {b.status==='completed' && btn('Reopen',        () => updateStatus(b.id,'confirmed'), 'reopen')}
-                      {b.status==='cancelled' && btn('Restore',       () => updateStatus(b.id,'pending'),   'restore')}
-                      {!['cancelled','completed','no_show'].includes(b.status) && btn('Cancel', () => updateStatus(b.id,'cancelled'), 'danger')}
+                      {isPending && (
+                        <button onClick={() => updateStatus(b.id,'confirmed')} disabled={updating===b.id}
+                          style={{ padding:'7px 16px', background:'#1a6b4a', color:'#fff', border:'none', borderRadius:'6px', fontSize:'13px', fontWeight:600, cursor:'pointer', opacity:updating===b.id?0.5:1, fontFamily:'sans-serif' }}>
+                          {updating===b.id?'...':'✓ Confirm'}
+                        </button>
+                      )}
+                      {b.status==='confirmed' && <button onClick={()=>updateStatus(b.id,'completed')} disabled={updating===b.id} style={{ padding:'6px 14px', background:'#1e4d8c', color:'#fff', border:'none', borderRadius:'6px', fontSize:'12px', fontWeight:500, cursor:'pointer', opacity:updating===b.id?0.5:1, fontFamily:'sans-serif' }}>Mark complete</button>}
+                      {b.status==='completed' && <button onClick={()=>updateStatus(b.id,'confirmed')} disabled={updating===b.id} style={{ padding:'6px 14px', background:'transparent', color:'#1e4d8c', border:'1px solid #1e4d8c', borderRadius:'6px', fontSize:'12px', fontWeight:500, cursor:'pointer', opacity:updating===b.id?0.5:1, fontFamily:'sans-serif' }}>Reopen</button>}
+                      {b.status==='cancelled' && <button onClick={()=>updateStatus(b.id,'pending')} disabled={updating===b.id} style={{ padding:'6px 14px', background:'transparent', color:'#9a5c10', border:'1px solid #9a5c10', borderRadius:'6px', fontSize:'12px', fontWeight:500, cursor:'pointer', opacity:updating===b.id?0.5:1, fontFamily:'sans-serif' }}>Restore</button>}
+                      {!['cancelled','completed','no_show'].includes(b.status) && <button onClick={()=>updateStatus(b.id,'cancelled')} disabled={updating===b.id} style={{ padding:'6px 14px', background:'transparent', color:'#8c2820', border:'1px solid #8c2820', borderRadius:'6px', fontSize:'12px', fontWeight:500, cursor:'pointer', opacity:updating===b.id?0.5:1, fontFamily:'sans-serif' }}>Cancel</button>}
                     </div>
                   </div>
                 </div>
@@ -133,4 +175,8 @@ export default function BookingsPage() {
       </div>
     </div>
   )
+}
+
+export default function BookingsPage() {
+  return <Suspense><BookingsInner /></Suspense>
 }
