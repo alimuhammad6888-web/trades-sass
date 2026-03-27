@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { useTenant } from '@/lib/tenant-context'
+import { useThemeTokens } from '@/lib/theme'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,6 +21,7 @@ const PALETTES = [
 
 export default function SettingsPage() {
   const { tenant } = useTenant()
+  const T = useThemeTokens()
   const [fetched, setFetched] = useState(false)
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
@@ -74,48 +76,56 @@ export default function SettingsPage() {
     setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2500)
   }
 
-  const inp: any  = { width:'100%', padding:'8px 11px', border:'1px solid #e8e4dc', borderRadius:'6px', fontSize:'13px', fontFamily:'sans-serif', color:'#1a1917', background:'#fff', outline:'none', boxSizing:'border-box' }
-  const lbl: any  = { fontSize:'11px', fontWeight:500, color:'#9a9590', textTransform:'uppercase' as any, letterSpacing:'0.06em', display:'block', marginBottom:'5px' }
-  const card: any = { background:'#fff', border:'1px solid #e8e4dc', borderRadius:'8px', padding:'20px', marginBottom:'16px' }
-  const cardTitle: any = { fontFamily:'Georgia, serif', fontSize:'14px', fontStyle:'italic', color:'#1a1917', marginBottom:'16px', paddingBottom:'10px', borderBottom:'1px solid #f0ede6' }
+  const inp: any = { width:'100%', padding:'9px 11px', border:`1px solid ${T.inputBorder}`, borderRadius:'6px', fontSize:'13px', fontFamily:'sans-serif', color:T.t1, background:T.input, outline:'none', boxSizing:'border-box', transition:'background 0.2s, color 0.2s' }
+  const lbl: any = { fontSize:'11px', fontWeight:500, color:T.t3, textTransform:'uppercase' as any, letterSpacing:'0.06em', display:'block', marginBottom:'5px' }
+  const card: any = { background:T.card, border:`1px solid ${T.border}`, borderRadius:'8px', padding:'20px', marginBottom:'16px', transition:'background 0.2s' }
+  const cardTitle: any = { fontFamily:'Georgia,serif', fontSize:'14px', fontStyle:'italic', color:T.t1, marginBottom:'16px', paddingBottom:'10px', borderBottom:`1px solid ${T.divider}` }
 
   const pp = form.primary_color
   const pr = ({ sharp:'0px', soft:'6px', round:'14px' } as any)[form.border_radius] ?? '6px'
   const pf = ({ sans:"'DM Sans',sans-serif", serif:'Georgia,serif', slab:'Rockwell,serif' } as any)[form.font_style] ?? 'sans-serif'
 
   return (
-    <div style={{ minHeight:'100vh', background:'#f8f6f1', fontFamily:'sans-serif' }}>
-      <div style={{ padding:'24px 28px 0', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+    <div style={{ minHeight:'100vh', background:T.bg, fontFamily:'sans-serif', transition:'background 0.2s' }}>
+      <style>{`
+        @keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:0.7} }
+        .settings-grid { display:grid; grid-template-columns:1fr 300px; gap:20px; padding:20px; max-width:1000px; }
+        @media (max-width:768px) { .settings-grid { grid-template-columns:1fr !important; } .preview-panel { display:none !important; } }
+      `}</style>
+
+      {/* Header */}
+      <div style={{ padding:'20px 20px 0', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'10px' }}>
         <div>
-          <h1 style={{ fontFamily:'Georgia, serif', fontSize:'22px', fontStyle:'italic', color:'#1a1917', marginBottom:'4px' }}>Settings</h1>
-          <p style={{ fontSize:'13px', color:'#9a9590' }}>Branding, contact info, and booking rules</p>
+          <h1 style={{ fontFamily:'Georgia,serif', fontSize:'22px', fontStyle:'italic', color:T.t1, marginBottom:'4px' }}>Settings</h1>
+          <p style={{ fontSize:'13px', color:T.t3 }}>Branding, contact info, and booking rules</p>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
           {saved && <span style={{ fontSize:'13px', color:'#1a6b4a' }}>✓ Saved</span>}
           <button onClick={save} disabled={saving || !fetched}
-            style={{ padding:'8px 20px', background:'#1a1917', color:'#fff', border:'none', borderRadius:'6px', fontSize:'13px', fontWeight:500, cursor:saving?'not-allowed':'pointer', opacity:saving||!fetched?0.5:1, fontFamily:'sans-serif' }}>
-            {saving ? 'Saving...' : 'Save changes'}
+            style={{ padding:'8px 20px', background:T.isDark?'#F4C300':'#1a1917', color:T.isDark?'#000':'#fff', border:'none', borderRadius:'6px', fontSize:'13px', fontWeight:600, cursor:saving?'not-allowed':'pointer', opacity:saving||!fetched?0.5:1, fontFamily:'sans-serif' }}>
+            {saving?'Saving...':'Save changes'}
           </button>
         </div>
       </div>
 
-      <div style={{ background:'#fff', borderBottom:'1px solid #e8e4dc', padding:'0 28px', display:'flex', marginTop:'16px' }}>
+      {/* Tabs */}
+      <div style={{ background:T.card, borderBottom:`1px solid ${T.border}`, padding:'0 20px', display:'flex', marginTop:'16px', transition:'background 0.2s' }}>
         {['branding','contact','booking'].map(t => (
           <button key={t} onClick={() => setTab(t)}
-            style={{ padding:'12px 16px', border:'none', borderBottom:`2px solid ${tab===t?'#1a1917':'transparent'}`, background:'transparent', fontSize:'13px', fontWeight:500, color:tab===t?'#1a1917':'#9a9590', cursor:'pointer', fontFamily:'sans-serif', textTransform:'capitalize' as any }}>
+            style={{ padding:'12px 16px', border:'none', borderBottom:`2px solid ${tab===t?T.t1:'transparent'}`, background:'transparent', fontSize:'13px', fontWeight:500, color:tab===t?T.t1:T.t3, cursor:'pointer', fontFamily:'sans-serif', textTransform:'capitalize' as any, transition:'color 0.2s' }}>
             {t}
           </button>
         ))}
       </div>
 
       {!fetched ? (
-        <div style={{ padding:'28px' }}>
-          {[1,2,3].map(i => <div key={i} style={{ background:'#fff', border:'1px solid #e8e4dc', borderRadius:'8px', height:'120px', marginBottom:'16px', animation:'pulse 1.5s ease infinite' }} />)}
+        <div style={{ padding:'20px' }}>
+          {[1,2,3].map(i => <div key={i} style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:'8px', height:'120px', marginBottom:'16px', animation:'pulse 1.5s ease infinite' }} />)}
         </div>
       ) : (
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 300px', gap:'20px', padding:'24px 28px', maxWidth:'1000px' }}>
+        <div className="settings-grid">
           <div>
-            {tab === 'branding' && (
+            {tab==='branding' && (
               <>
                 <div style={card}>
                   <div style={cardTitle}>Business identity</div>
@@ -124,34 +134,35 @@ export default function SettingsPage() {
                     <div><label style={lbl}>Tagline</label><input style={inp} value={form.tagline} onChange={e => update('tagline', e.target.value)} placeholder="e.g. Everything is no problem." /></div>
                   </div>
                 </div>
+
                 <div style={card}>
                   <div style={cardTitle}>Colors</div>
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', marginBottom:'16px' }}>
-                    <div>
-                      <label style={lbl}>Primary color</label>
-                      <div style={{ display:'flex', alignItems:'center', gap:'10px', border:'1px solid #e8e4dc', borderRadius:'6px', padding:'8px 12px' }}>
-                        <input type="color" value={form.primary_color} onChange={e => update('primary_color', e.target.value)} style={{ width:'40px', height:'30px', border:'1px solid #e8e4dc', borderRadius:'4px', cursor:'pointer', padding:'2px' }} />
-                        <span style={{ fontFamily:'monospace', fontSize:'12px', color:'#1a1917' }}>{form.primary_color}</span>
+                    {[
+                      { key:'primary_color', label:'Primary color' },
+                      { key:'accent_color',  label:'Accent color' },
+                    ].map(f => (
+                      <div key={f.key}>
+                        <label style={lbl}>{f.label}</label>
+                        <div style={{ display:'flex', alignItems:'center', gap:'10px', border:`1px solid ${T.inputBorder}`, borderRadius:'6px', padding:'8px 12px', background:T.input }}>
+                          <input type="color" value={(form as any)[f.key]} onChange={e => update(f.key, e.target.value)}
+                            style={{ width:'40px', height:'30px', border:`1px solid ${T.border}`, borderRadius:'4px', cursor:'pointer', padding:'2px', background:'none' }} />
+                          <span style={{ fontFamily:'monospace', fontSize:'12px', color:T.t1 }}>{(form as any)[f.key]}</span>
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      <label style={lbl}>Accent color</label>
-                      <div style={{ display:'flex', alignItems:'center', gap:'10px', border:'1px solid #e8e4dc', borderRadius:'6px', padding:'8px 12px' }}>
-                        <input type="color" value={form.accent_color} onChange={e => update('accent_color', e.target.value)} style={{ width:'40px', height:'30px', border:'1px solid #e8e4dc', borderRadius:'4px', cursor:'pointer', padding:'2px' }} />
-                        <span style={{ fontFamily:'monospace', fontSize:'12px', color:'#1a1917' }}>{form.accent_color}</span>
-                      </div>
-                    </div>
+                    ))}
                   </div>
                   <label style={lbl}>Quick palettes</label>
                   <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' as any }}>
                     {PALETTES.map(pal => (
                       <button key={pal.label} onClick={() => { update('primary_color', pal.p); update('accent_color', pal.a) }}
-                        style={{ display:'flex', alignItems:'center', gap:'6px', padding:'5px 12px', border:`1.5px solid ${form.primary_color===pal.p?pal.p:'#e8e4dc'}`, borderRadius:'20px', background:form.primary_color===pal.p?pal.p+'22':'transparent', cursor:'pointer', fontSize:'12px', fontWeight:500, fontFamily:'sans-serif', color:'#1a1917' }}>
+                        style={{ display:'flex', alignItems:'center', gap:'6px', padding:'5px 12px', border:`1.5px solid ${form.primary_color===pal.p?pal.p:T.border}`, borderRadius:'20px', background:form.primary_color===pal.p?pal.p+'22':T.card, cursor:'pointer', fontSize:'12px', fontWeight:500, fontFamily:'sans-serif', color:T.t1, transition:'all 0.15s' }}>
                         <div style={{ width:'10px', height:'10px', borderRadius:'50%', background:pal.p }} />{pal.label}
                       </button>
                     ))}
                   </div>
                 </div>
+
                 <div style={card}>
                   <div style={cardTitle}>Style</div>
                   <div style={{ marginBottom:'14px' }}>
@@ -159,7 +170,9 @@ export default function SettingsPage() {
                     <div style={{ display:'flex', gap:'8px' }}>
                       {['sharp','soft','round'].map(r => (
                         <button key={r} onClick={() => update('border_radius', r)}
-                          style={{ padding:'6px 16px', border:`1.5px solid ${form.border_radius===r?'#1a1917':'#e8e4dc'}`, borderRadius:r==='sharp'?'2px':r==='soft'?'6px':'20px', background:form.border_radius===r?'#1a1917':'transparent', color:form.border_radius===r?'#fff':'#4a4843', cursor:'pointer', fontSize:'12px', fontWeight:500, fontFamily:'sans-serif' }}>{r}</button>
+                          style={{ padding:'6px 16px', border:`1.5px solid ${form.border_radius===r?T.t1:T.border}`, borderRadius:r==='sharp'?'2px':r==='soft'?'6px':'20px', background:form.border_radius===r?T.t1:'transparent', color:form.border_radius===r?(T.isDark?'#000':'#fff'):T.t2, cursor:'pointer', fontSize:'12px', fontWeight:500, fontFamily:'sans-serif', transition:'all 0.15s' }}>
+                          {r}
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -168,41 +181,59 @@ export default function SettingsPage() {
                     <div style={{ display:'flex', gap:'8px' }}>
                       {[{key:'sans',label:'Sans',fam:'DM Sans,sans-serif'},{key:'serif',label:'Serif',fam:'Georgia,serif'},{key:'slab',label:'Slab',fam:'Rockwell,serif'}].map(f => (
                         <button key={f.key} onClick={() => update('font_style', f.key)}
-                          style={{ padding:'6px 16px', border:`1.5px solid ${form.font_style===f.key?'#1a1917':'#e8e4dc'}`, borderRadius:'6px', background:form.font_style===f.key?'#1a1917':'transparent', color:form.font_style===f.key?'#fff':'#4a4843', cursor:'pointer', fontSize:'13px', fontWeight:500, fontFamily:f.fam }}>{f.label}</button>
+                          style={{ padding:'6px 16px', border:`1.5px solid ${form.font_style===f.key?T.t1:T.border}`, borderRadius:'6px', background:form.font_style===f.key?T.t1:'transparent', color:form.font_style===f.key?(T.isDark?'#000':'#fff'):T.t2, cursor:'pointer', fontSize:'13px', fontWeight:500, fontFamily:f.fam, transition:'all 0.15s' }}>
+                          {f.label}
+                        </button>
                       ))}
                     </div>
                   </div>
                 </div>
               </>
             )}
-            {tab === 'contact' && (
+
+            {tab==='contact' && (
               <div style={card}>
                 <div style={cardTitle}>Contact information</div>
                 <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
-                  {[{key:'phone',label:'Phone',ph:'(555) 000-0000'},{key:'email',label:'Email',ph:'hello@yourbusiness.com'},{key:'address_line1',label:'Address',ph:'123 Main St'},{key:'city',label:'City',ph:'Los Angeles'},{key:'state',label:'State',ph:'CA'}].map(field => (
-                    <div key={field.key}><label style={lbl}>{field.label}</label><input style={inp} value={(form as any)[field.key]} onChange={e => update(field.key, e.target.value)} placeholder={field.ph} /></div>
+                  {[{key:'phone',label:'Phone',ph:'(555) 000-0000'},{key:'email',label:'Email',ph:'hello@yourbusiness.com'},{key:'address_line1',label:'Address',ph:'123 Main St'},{key:'city',label:'City',ph:'Los Angeles'},{key:'state',label:'State',ph:'CA'}].map(f => (
+                    <div key={f.key}><label style={lbl}>{f.label}</label><input style={inp} value={(form as any)[f.key]} onChange={e => update(f.key, e.target.value)} placeholder={f.ph} /></div>
                   ))}
                 </div>
               </div>
             )}
-            {tab === 'booking' && (
+
+            {tab==='booking' && (
               <div style={card}>
                 <div style={cardTitle}>Booking settings</div>
                 <div style={{ display:'flex', flexDirection:'column', gap:'14px' }}>
-                  <div><label style={lbl}>Lead time (hours)</label><input style={inp} type="number" value={form.booking_lead_time_hours} onChange={e => update('booking_lead_time_hours', parseInt(e.target.value))} /><div style={{ fontSize:'11px', color:'#9a9590', marginTop:'4px' }}>Minimum hours before a customer can book</div></div>
-                  <div><label style={lbl}>Booking window (days)</label><input style={inp} type="number" value={form.booking_window_days} onChange={e => update('booking_window_days', parseInt(e.target.value))} /><div style={{ fontSize:'11px', color:'#9a9590', marginTop:'4px' }}>How far ahead customers can book</div></div>
-                  <div style={{ display:'flex', alignItems:'center', gap:'10px' }}><input type="checkbox" id="autoconfirm" checked={form.auto_confirm_bookings} onChange={e => update('auto_confirm_bookings', e.target.checked)} style={{ width:'16px', height:'16px', accentColor:'#1a1917' }} /><label htmlFor="autoconfirm" style={{ fontSize:'13px', color:'#1a1917', cursor:'pointer' }}>Auto-confirm bookings</label></div>
-                  <div><label style={lbl}>Chatbot greeting</label><input style={inp} value={form.chatbot_greeting} onChange={e => update('chatbot_greeting', e.target.value)} placeholder="Hi! How can I help you today?" /></div>
+                  <div>
+                    <label style={lbl}>Lead time (hours)</label>
+                    <input style={inp} type="number" value={form.booking_lead_time_hours} onChange={e => update('booking_lead_time_hours', parseInt(e.target.value))} />
+                    <div style={{ fontSize:'11px', color:T.t3, marginTop:'4px' }}>Minimum hours before a customer can book</div>
+                  </div>
+                  <div>
+                    <label style={lbl}>Booking window (days)</label>
+                    <input style={inp} type="number" value={form.booking_window_days} onChange={e => update('booking_window_days', parseInt(e.target.value))} />
+                    <div style={{ fontSize:'11px', color:T.t3, marginTop:'4px' }}>How far ahead customers can book</div>
+                  </div>
+                  <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+                    <input type="checkbox" id="autoconfirm" checked={form.auto_confirm_bookings} onChange={e => update('auto_confirm_bookings', e.target.checked)} style={{ width:'16px', height:'16px', accentColor:T.isDark?'#F4C300':'#1a1917' }} />
+                    <label htmlFor="autoconfirm" style={{ fontSize:'13px', color:T.t1, cursor:'pointer' }}>Auto-confirm bookings</label>
+                  </div>
+                  <div>
+                    <label style={lbl}>Chatbot greeting</label>
+                    <input style={inp} value={form.chatbot_greeting} onChange={e => update('chatbot_greeting', e.target.value)} placeholder="Hi! How can I help you today?" />
+                  </div>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Live preview */}
-          <div>
+          {/* Preview — hidden on mobile */}
+          <div className="preview-panel">
             <div style={{ position:'sticky', top:'20px' }}>
-              <div style={{ fontSize:'10px', fontWeight:500, textTransform:'uppercase' as any, letterSpacing:'0.07em', color:'#9a9590', marginBottom:'10px' }}>Live preview</div>
-              <div style={{ border:'1px solid #e8e4dc', borderRadius:'8px', overflow:'hidden' }}>
+              <div style={{ fontSize:'10px', fontWeight:500, textTransform:'uppercase' as any, letterSpacing:'0.07em', color:T.label, marginBottom:'10px' }}>Live preview</div>
+              <div style={{ border:`1px solid ${T.border}`, borderRadius:'8px', overflow:'hidden' }}>
                 <div style={{ background:'#111', padding:'10px 14px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                   <span style={{ color:pp, fontWeight:800, fontSize:'13px', textTransform:'uppercase' as any, fontFamily:pf }}>{bizName||'Your Business'}</span>
                   <span style={{ background:pp, color:'#000', padding:'4px 10px', borderRadius:pr, fontSize:'10px', fontWeight:700, textTransform:'uppercase' as any }}>Book now</span>
@@ -214,12 +245,19 @@ export default function SettingsPage() {
                   <div style={{ fontSize:'11px', color:'#666', marginBottom:'14px' }}>{form.tagline||'Your tagline here'}</div>
                   <div style={{ display:'inline-flex', padding:'8px 14px', background:pp, color:'#000', borderRadius:pr, fontSize:'11px', fontWeight:700, textTransform:'uppercase' as any, fontFamily:pf }}>⚡ Book a service</div>
                 </div>
+                <div style={{ padding:'12px', background:'#0a0a0a' }}>
+                  <div style={{ border:'1px solid #222', borderRadius:pr, padding:'12px', background:'#111', position:'relative', overflow:'hidden' }}>
+                    <div style={{ position:'absolute', top:0, left:0, right:0, height:'2px', background:pp }} />
+                    <div style={{ fontSize:'12px', fontWeight:700, color:'#fff', textTransform:'uppercase' as any, marginBottom:'4px', fontFamily:pf }}>Panel Upgrade</div>
+                    <div style={{ fontSize:'10px', color:'#666', marginBottom:'8px' }}>200A service, permitted and inspected.</div>
+                    <div style={{ fontSize:'11px', color:pp, fontWeight:600 }}>$1,500 · Full day</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
       )}
-      <style>{`@keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:0.7} }`}</style>
     </div>
   )
 }

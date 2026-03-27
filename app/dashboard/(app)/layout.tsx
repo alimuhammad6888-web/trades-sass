@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import { TenantProvider } from '@/lib/tenant-context'
@@ -25,17 +25,22 @@ export default function DashboardAppLayout({ children }: { children: React.React
   const router   = useRouter()
   const pathname = usePathname()
 
-  const [tenant, setTenant]           = useState<Tenant | null>(null)
+  const [tenant, setTenant]           = useState<Tenant|null>(null)
+  const [loading, setLoading]         = useState(true)
   const [collapsed, setCollapsed]     = useState(false)
   const [mobileOpen, setMobileOpen]   = useState(false)
   const [upgradeOpen, setUpgradeOpen] = useState(false)
   const [logoUrl, setLogoUrl]         = useState<string|null>(null)
-  // loading stays true only briefly — we never block the UI on it
-  const [loading, setLoading]         = useState(true)
+  const [theme, setThemeState]        = useState<'dark'|'light'>('dark')
+  const [settingsId, setSettingsId]   = useState<string|null>(null)
 
   useEffect(() => {
-    const saved = localStorage.getItem('dash-sidebar')
-    if (saved === 'collapsed') setCollapsed(true)
+    // Apply theme immediately from localStorage to avoid flash
+    const saved = localStorage.getItem('dash-theme') as 'dark'|'light'|null
+    if (saved) setThemeState(saved)
+
+    const sidebarSaved = localStorage.getItem('dash-sidebar')
+    if (sidebarSaved === 'collapsed') setCollapsed(true)
   }, [])
 
   useEffect(() => {
@@ -53,7 +58,7 @@ export default function DashboardAppLayout({ children }: { children: React.React
 
       const { data: tenantData } = await supabase
         .from('tenants')
-        .select('id, name, slug, plan, business_settings(features, logo_url)')
+        .select('id, name, slug, plan, business_settings(id, features, logo_url, dashboard_theme)')
         .eq('id', userRow.tenant_id)
         .single()
 
@@ -70,11 +75,25 @@ export default function DashboardAppLayout({ children }: { children: React.React
         plan:     tenantData.plan,
         features: { ...DEFAULT_FEATURES, ...(settings?.features ?? {}) },
       })
-      if (settings?.logo_url) setLogoUrl(settings.logo_url)
+      if (settings?.logo_url)    setLogoUrl(settings.logo_url)
+      if (settings?.id)          setSettingsId(settings.id)
+      if (settings?.dashboard_theme) {
+        setThemeState(settings.dashboard_theme)
+        localStorage.setItem('dash-theme', settings.dashboard_theme)
+      }
       setLoading(false)
     }
     init()
   }, [])
+
+  const handleThemeChange = useCallback(async (t: 'dark'|'light') => {
+    setThemeState(t)
+    localStorage.setItem('dash-theme', t)
+    // Persist to DB
+    if (settingsId) {
+      await supabase.from('business_settings').update({ dashboard_theme: t }).eq('id', settingsId)
+    }
+  }, [settingsId])
 
   function toggleCollapse() {
     const next = !collapsed
@@ -92,28 +111,37 @@ export default function DashboardAppLayout({ children }: { children: React.React
     return pathname.startsWith(href)
   }
 
-  const showLabels = !collapsed
+  // Theme tokens for sidebar
+  const S = theme === 'dark' ? {
+    bg: '#111', border: '#1a1a1a', activeBg: '#1e1e1e',
+    text: '#aaa', activeText: '#fff', subtext: '#555',
+    logoBg: '#F4C300', logoText: '#000',
+  } : {
+    bg: '#fff', border: '#e8e4dc', activeBg: '#f0ede6',
+    text: '#9a9590', activeText: '#1a1917', subtext: '#c8c4bc',
+    logoBg: '#1a1917', logoText: '#fff',
+  }
 
   const Sidebar = ({ mobile = false }: { mobile?: boolean }) => {
-    const labels = mobile || showLabels
+    const labels = mobile || !collapsed
     return (
-      <div style={{ display:'flex', flexDirection:'column', height:'100%' }}>
+      <div style={{ display:'flex', flexDirection:'column', height:'100%', background:S.bg, transition:'background 0.2s' }}>
 
         {/* Business name */}
-        <div style={{ padding: labels ? '18px 16px' : '18px 0', borderBottom:'1px solid #1e1e1e', display:'flex', alignItems:'center', gap:'10px', justifyContent: labels ? 'flex-start' : 'center', minHeight:'68px' }}>
+        <div style={{ padding:labels?'18px 16px':'18px 0', borderBottom:`1px solid ${S.border}`, display:'flex', alignItems:'center', gap:'10px', justifyContent:labels?'flex-start':'center', minHeight:'68px' }}>
           {logoUrl ? (
             <img src={logoUrl} alt="logo" style={{ width:'34px', height:'34px', borderRadius:'6px', objectFit:'cover', flexShrink:0 }} />
           ) : (
-            <div style={{ width:'34px', height:'34px', borderRadius:'8px', background:'#F4C300', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', fontWeight:800, color:'#000', flexShrink:0, fontFamily:'Barlow Condensed, sans-serif' }}>
+            <div style={{ width:'34px', height:'34px', borderRadius:'8px', background:S.logoBg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', fontWeight:800, color:S.logoText, flexShrink:0, fontFamily:'Barlow Condensed,sans-serif' }}>
               {tenant?.name?.[0] ?? '⚡'}
             </div>
           )}
           {labels && (
             <div style={{ minWidth:0 }}>
-              <div style={{ fontSize:'14px', fontWeight:700, color:'#fff', fontFamily:'Barlow Condensed, sans-serif', textTransform:'uppercase', letterSpacing:'0.04em', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+              <div style={{ fontSize:'14px', fontWeight:700, color:S.activeText, fontFamily:'Barlow Condensed,sans-serif', textTransform:'uppercase', letterSpacing:'0.04em', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', transition:'color 0.2s' }}>
                 {tenant?.name ?? '...'}
               </div>
-              <div style={{ fontSize:'11px', color:'#555', marginTop:'1px' }}>Owner dashboard</div>
+              <div style={{ fontSize:'11px', color:S.subtext, marginTop:'1px' }}>Owner dashboard</div>
             </div>
           )}
         </div>
@@ -128,11 +156,11 @@ export default function DashboardAppLayout({ children }: { children: React.React
               <button key={item.label}
                 onClick={() => { setUpgradeOpen(true); setMobileOpen(false) }}
                 title={!labels ? item.label : undefined}
-                style={{ width:'100%', display:'flex', alignItems:'center', gap:'10px', padding: labels ? '10px 12px' : '10px 0', justifyContent: labels ? 'flex-start' : 'center', background:'transparent', border:'none', borderRadius:'8px', cursor:'pointer', fontFamily:'DM Sans, sans-serif', opacity:0.4, marginBottom:'2px' }}>
+                style={{ width:'100%', display:'flex', alignItems:'center', gap:'10px', padding:labels?'10px 12px':'10px 0', justifyContent:labels?'flex-start':'center', background:'transparent', border:'none', borderRadius:'8px', cursor:'pointer', fontFamily:'DM Sans,sans-serif', opacity:0.4, marginBottom:'2px' }}>
                 <span style={{ fontSize:'18px', flexShrink:0, lineHeight:1 }}>{item.icon}</span>
                 {labels && (
                   <>
-                    <span style={{ fontSize:'13px', fontWeight:500, color:'#888', flex:1, textAlign:'left' }}>{item.label}</span>
+                    <span style={{ fontSize:'13px', fontWeight:500, color:S.text, flex:1, textAlign:'left' }}>{item.label}</span>
                     <span style={{ fontSize:'9px', padding:'2px 5px', background:'#2a1f00', color:'#F4C300', borderRadius:'4px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em' }}>Pro</span>
                   </>
                 )}
@@ -143,12 +171,12 @@ export default function DashboardAppLayout({ children }: { children: React.React
               <a key={item.label} href={item.href}
                 onClick={() => setMobileOpen(false)}
                 title={!labels ? item.label : undefined}
-                style={{ display:'flex', alignItems:'center', gap:'10px', padding: labels ? '10px 12px' : '10px 0', justifyContent: labels ? 'flex-start' : 'center', background: active ? '#1e1e1e' : 'transparent', borderRadius:'8px', textDecoration:'none', marginBottom:'2px', transition:'background 0.15s', borderLeft: active ? '3px solid #F4C300' : '3px solid transparent' }}
-                onMouseEnter={e => { if (!active) e.currentTarget.style.background='#161616' }}
-                onMouseLeave={e => { if (!active) e.currentTarget.style.background='transparent' }}>
+                style={{ display:'flex', alignItems:'center', gap:'10px', padding:labels?'10px 12px':'10px 0', justifyContent:labels?'flex-start':'center', background:active?S.activeBg:'transparent', borderRadius:'8px', textDecoration:'none', marginBottom:'2px', transition:'background 0.15s', borderLeft:active?'3px solid #F4C300':'3px solid transparent' }}
+                onMouseEnter={e => { if(!active) e.currentTarget.style.background=theme==='dark'?'#161616':'#f8f5f0' }}
+                onMouseLeave={e => { if(!active) e.currentTarget.style.background='transparent' }}>
                 <span style={{ fontSize:'18px', flexShrink:0, lineHeight:1 }}>{item.icon}</span>
                 {labels && (
-                  <span style={{ fontSize:'13px', fontWeight: active ? 600 : 500, color: active ? '#fff' : '#aaa' }}>
+                  <span style={{ fontSize:'13px', fontWeight:active?600:500, color:active?S.activeText:S.text, transition:'color 0.2s' }}>
                     {item.label}
                   </span>
                 )}
@@ -158,31 +186,31 @@ export default function DashboardAppLayout({ children }: { children: React.React
         </nav>
 
         {/* Bottom */}
-        <div style={{ padding:'10px 8px', borderTop:'1px solid #1e1e1e' }}>
+        <div style={{ padding:'10px 8px', borderTop:`1px solid ${S.border}` }}>
           {labels && (
             <a href="/" target="_blank"
               style={{ display:'flex', alignItems:'center', gap:'10px', padding:'9px 12px', borderRadius:'8px', textDecoration:'none', marginBottom:'2px', transition:'background 0.15s' }}
-              onMouseEnter={e => e.currentTarget.style.background='#161616'}
+              onMouseEnter={e => e.currentTarget.style.background=theme==='dark'?'#161616':'#f8f5f0'}
               onMouseLeave={e => e.currentTarget.style.background='transparent'}>
               <span style={{ fontSize:'18px', lineHeight:1 }}>🌐</span>
-              <span style={{ fontSize:'13px', color:'#666', fontWeight:500 }}>View site</span>
+              <span style={{ fontSize:'13px', color:S.subtext, fontWeight:500 }}>View site</span>
             </a>
           )}
           <button onClick={signOut}
-            title={!labels ? 'Sign out' : undefined}
-            style={{ width:'100%', display:'flex', alignItems:'center', gap:'10px', padding: labels ? '9px 12px' : '10px 0', justifyContent: labels ? 'flex-start' : 'center', background:'transparent', border:'none', borderRadius:'8px', cursor:'pointer', fontFamily:'DM Sans, sans-serif', marginBottom:'2px', transition:'background 0.15s' }}
-            onMouseEnter={e => e.currentTarget.style.background='#161616'}
+            title={!labels?'Sign out':undefined}
+            style={{ width:'100%', display:'flex', alignItems:'center', gap:'10px', padding:labels?'9px 12px':'10px 0', justifyContent:labels?'flex-start':'center', background:'transparent', border:'none', borderRadius:'8px', cursor:'pointer', fontFamily:'DM Sans,sans-serif', marginBottom:'2px', transition:'background 0.15s' }}
+            onMouseEnter={e => e.currentTarget.style.background=theme==='dark'?'#161616':'#f8f5f0'}
             onMouseLeave={e => e.currentTarget.style.background='transparent'}>
             <span style={{ fontSize:'18px', lineHeight:1 }}>🚪</span>
-            {labels && <span style={{ fontSize:'13px', color:'#666', fontWeight:500 }}>Sign out</span>}
+            {labels && <span style={{ fontSize:'13px', color:S.subtext, fontWeight:500 }}>Sign out</span>}
           </button>
           {!mobile && (
             <button onClick={toggleCollapse}
-              style={{ width:'100%', display:'flex', alignItems:'center', gap:'10px', padding: labels ? '9px 12px' : '10px 0', justifyContent: labels ? 'flex-start' : 'center', background:'transparent', border:'none', borderRadius:'8px', cursor:'pointer', fontFamily:'DM Sans, sans-serif', transition:'background 0.15s' }}
-              onMouseEnter={e => e.currentTarget.style.background='#161616'}
+              style={{ width:'100%', display:'flex', alignItems:'center', gap:'10px', padding:labels?'9px 12px':'10px 0', justifyContent:labels?'flex-start':'center', background:'transparent', border:'none', borderRadius:'8px', cursor:'pointer', fontFamily:'DM Sans,sans-serif', transition:'background 0.15s' }}
+              onMouseEnter={e => e.currentTarget.style.background=theme==='dark'?'#161616':'#f8f5f0'}
               onMouseLeave={e => e.currentTarget.style.background='transparent'}>
-              <span style={{ fontSize:'14px', display:'inline-block', transform: collapsed ? 'rotate(180deg)' : 'none', transition:'transform 0.2s' }}>◀</span>
-              {labels && <span style={{ fontSize:'12px', color:'#444', fontWeight:500 }}>Collapse</span>}
+              <span style={{ fontSize:'14px', display:'inline-block', transform:collapsed?'rotate(180deg)':'none', transition:'transform 0.2s', color:S.subtext }}>◀</span>
+              {labels && <span style={{ fontSize:'12px', color:S.subtext, fontWeight:500 }}>Collapse</span>}
             </button>
           )}
         </div>
@@ -191,12 +219,12 @@ export default function DashboardAppLayout({ children }: { children: React.React
   }
 
   return (
-    <TenantProvider tenant={tenant} loading={loading}>
+    <TenantProvider tenant={tenant} loading={loading} initialTheme={theme} onThemeChange={handleThemeChange}>
       <style suppressHydrationWarning>{`
         @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { height: 100%; }
-        body { font-family: 'DM Sans', sans-serif; background: #0f0f0f; color: #fff; }
+        body { font-family: 'DM Sans', sans-serif; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
         @keyframes slideIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
@@ -204,17 +232,17 @@ export default function DashboardAppLayout({ children }: { children: React.React
         @media (min-width: 769px) { .mobile-topbar { display: none !important; } }
       `}</style>
 
-      <div style={{ display:'flex', height:'100vh', overflow:'hidden' }}>
+      <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:theme==='dark'?'#0f0f0f':'#f4f2ee', transition:'background 0.2s' }}>
 
         {/* Desktop sidebar */}
-        <div className="desktop-sidebar" style={{ width: collapsed ? '60px' : '220px', flexShrink:0, background:'#111', borderRight:'1px solid #1a1a1a', display:'flex', flexDirection:'column', transition:'width 0.2s ease', overflow:'hidden', height:'100vh', position:'sticky', top:0 }}>
+        <div className="desktop-sidebar" style={{ width:collapsed?'60px':'220px', flexShrink:0, borderRight:`1px solid ${S.border}`, display:'flex', flexDirection:'column', transition:'width 0.2s ease', overflow:'hidden', height:'100vh', position:'sticky', top:0 }}>
           <Sidebar />
         </div>
 
         {/* Mobile topbar */}
-        <div className="mobile-topbar" style={{ display:'none', position:'fixed', top:0, left:0, right:0, height:'52px', background:'#111', borderBottom:'1px solid #1a1a1a', zIndex:50, alignItems:'center', padding:'0 16px', gap:'12px' }}>
-          <button onClick={() => setMobileOpen(true)} style={{ background:'none', border:'none', color:'#fff', fontSize:'22px', cursor:'pointer', padding:'4px', lineHeight:1 }}>☰</button>
-          <span style={{ fontFamily:'Barlow Condensed', fontSize:'18px', fontWeight:800, textTransform:'uppercase', letterSpacing:'0.05em', color:'#fff' }}>
+        <div className="mobile-topbar" style={{ display:'none', position:'fixed', top:0, left:0, right:0, height:'52px', background:S.bg, borderBottom:`1px solid ${S.border}`, zIndex:50, alignItems:'center', padding:'0 16px', gap:'12px', transition:'background 0.2s' }}>
+          <button onClick={() => setMobileOpen(true)} style={{ background:'none', border:'none', color:S.activeText, fontSize:'22px', cursor:'pointer', padding:'4px', lineHeight:1 }}>☰</button>
+          <span style={{ fontFamily:'Barlow Condensed', fontSize:'18px', fontWeight:800, textTransform:'uppercase', letterSpacing:'0.05em', color:S.activeText }}>
             {tenant?.name ?? 'Dashboard'}
           </span>
         </div>
@@ -222,8 +250,8 @@ export default function DashboardAppLayout({ children }: { children: React.React
         {/* Mobile drawer */}
         {mobileOpen && (
           <div onClick={() => setMobileOpen(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:60 }}>
-            <div onClick={e => e.stopPropagation()} style={{ position:'absolute', top:0, left:0, bottom:0, width:'260px', background:'#111', borderRight:'1px solid #1a1a1a', animation:'slideIn 0.2s ease' }}>
-              <button onClick={() => setMobileOpen(false)} style={{ position:'absolute', top:'16px', right:'16px', background:'none', border:'none', color:'#666', fontSize:'22px', cursor:'pointer', zIndex:1 }}>×</button>
+            <div onClick={e => e.stopPropagation()} style={{ position:'absolute', top:0, left:0, bottom:0, width:'260px', borderRight:`1px solid ${S.border}`, animation:'slideIn 0.2s ease' }}>
+              <button onClick={() => setMobileOpen(false)} style={{ position:'absolute', top:'16px', right:'16px', background:'none', border:'none', color:S.subtext, fontSize:'22px', cursor:'pointer', zIndex:1 }}>×</button>
               <Sidebar mobile />
             </div>
           </div>
@@ -245,9 +273,7 @@ export default function DashboardAppLayout({ children }: { children: React.React
             <button onClick={() => setUpgradeOpen(false)} style={{ float:'right', background:'none', border:'none', fontSize:'20px', cursor:'pointer', color:'#9a9590' }}>×</button>
             <div style={{ fontSize:'11px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'#9a5c10', background:'#fef4e0', padding:'4px 12px', borderRadius:'20px', display:'inline-block', marginBottom:'16px' }}>Pro feature</div>
             <h2 style={{ fontFamily:'Georgia, serif', fontSize:'20px', fontStyle:'italic', marginBottom:'8px' }}>Upgrade to unlock</h2>
-            <p style={{ fontSize:'14px', color:'#9a9590', lineHeight:1.6, marginBottom:'20px' }}>
-              Available on the Pro plan at $99/month. Includes AI chatbot, SMS, campaigns, inbox, and more.
-            </p>
+            <p style={{ fontSize:'14px', color:'#9a9590', lineHeight:1.6, marginBottom:'20px' }}>Available on the Pro plan at $99/month.</p>
             <button onClick={() => setUpgradeOpen(false)} style={{ width:'100%', padding:'11px', background:'#1a1917', color:'#fff', border:'none', borderRadius:'6px', fontSize:'14px', fontWeight:500, cursor:'pointer', fontFamily:'sans-serif' }}>
               Contact us to upgrade
             </button>
