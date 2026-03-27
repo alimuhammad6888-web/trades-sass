@@ -28,10 +28,12 @@ export default function SettingsPage() {
   const [tab, setTab]         = useState('branding')
   const [bizName, setBizName] = useState('')
   const [form, setForm] = useState({
-    primary_color:'#F4C300', accent_color:'#1a1a1a', tagline:'',
-    phone:'', email:'', address_line1:'', city:'', state:'',
-    border_radius:'soft', font_style:'sans', chatbot_greeting:'',
-    booking_lead_time_hours:2, booking_window_days:60, auto_confirm_bookings:false,
+    primary_color: '#F4C300', accent_color: '#1a1a1a', tagline: '',
+    phone: '', email: '', address_line1: '', city: '', state: '',
+    border_radius: 'soft', font_style: 'sans', chatbot_greeting: '',
+    booking_lead_time_hours: 2, booking_window_days: 60,
+    auto_confirm_bookings: false,
+    notification_email: '', notification_phone: '',
   })
 
   useEffect(() => {
@@ -45,27 +47,31 @@ export default function SettingsPage() {
         const s = sr.data
         setForm(f => ({
           ...f,
-          primary_color: s.primary_color ?? f.primary_color,
-          accent_color:  s.accent_color  ?? f.accent_color,
-          tagline:       s.tagline       ?? '',
-          phone:         s.phone         ?? '',
-          email:         s.email         ?? '',
-          address_line1: s.address_line1 ?? '',
-          city:          s.city          ?? '',
-          state:         s.state         ?? '',
-          border_radius: s.border_radius ?? 'soft',
-          font_style:    s.font_style    ?? 'sans',
-          chatbot_greeting:        s.chatbot_greeting        ?? '',
-          booking_lead_time_hours: s.booking_lead_time_hours ?? 2,
-          booking_window_days:     s.booking_window_days     ?? 60,
-          auto_confirm_bookings:   s.auto_confirm_bookings   ?? false,
+          primary_color:            s.primary_color            ?? f.primary_color,
+          accent_color:             s.accent_color             ?? f.accent_color,
+          tagline:                  s.tagline                  ?? '',
+          phone:                    s.phone                    ?? '',
+          email:                    s.email                    ?? '',
+          address_line1:            s.address_line1            ?? '',
+          city:                     s.city                     ?? '',
+          state:                    s.state                    ?? '',
+          border_radius:            s.border_radius            ?? 'soft',
+          font_style:               s.font_style               ?? 'sans',
+          chatbot_greeting:         s.chatbot_greeting         ?? '',
+          booking_lead_time_hours:  s.booking_lead_time_hours  ?? 2,
+          booking_window_days:      s.booking_window_days      ?? 60,
+          auto_confirm_bookings:    s.auto_confirm_bookings    ?? false,
+          notification_email:       s.notification_email       ?? '',
+          notification_phone:       s.notification_phone       ?? '',
         }))
       }
       setFetched(true)
     })
   }, [tenant?.id])
 
-  function update(key: string, value: any) { setForm(f => ({ ...f, [key]: value })) }
+  function update(key: string, value: any) {
+    setForm(f => ({ ...f, [key]: value }))
+  }
 
   async function save() {
     setSaving(true)
@@ -80,40 +86,39 @@ export default function SettingsPage() {
   const lbl: any = { fontSize:'11px', fontWeight:500, color:T.t3, textTransform:'uppercase' as any, letterSpacing:'0.06em', display:'block', marginBottom:'5px' }
   const card: any = { background:T.card, border:`1px solid ${T.border}`, borderRadius:'8px', padding:'20px', marginBottom:'16px', transition:'background 0.2s' }
   const cardTitle: any = { fontFamily:'Georgia,serif', fontSize:'14px', fontStyle:'italic', color:T.t1, marginBottom:'16px', paddingBottom:'10px', borderBottom:`1px solid ${T.divider}` }
+  const hint: any = { fontSize:'11px', color:T.t3, marginTop:'5px', lineHeight:1.5 }
 
   const pp = form.primary_color
   const pr = ({ sharp:'0px', soft:'6px', round:'14px' } as any)[form.border_radius] ?? '6px'
   const pf = ({ sans:"'DM Sans',sans-serif", serif:'Georgia,serif', slab:'Rockwell,serif' } as any)[form.font_style] ?? 'sans-serif'
 
+  const TABS = ['branding', 'contact', 'notifications', 'booking']
+
   return (
     <div style={{ minHeight:'100vh', background:T.bg, fontFamily:'sans-serif', transition:'background 0.2s' }}>
-      <style>{`
-        @keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:0.7} }
-        .settings-grid { display:grid; grid-template-columns:1fr 300px; gap:20px; padding:20px; max-width:1000px; }
-        @media (max-width:768px) { .settings-grid { grid-template-columns:1fr !important; } .preview-panel { display:none !important; } }
-      `}</style>
+      <style>{`@keyframes pulse{0%,100%{opacity:0.4}50%{opacity:0.7}} .settings-grid{display:grid;grid-template-columns:1fr 300px;gap:20px;padding:20px;max-width:1000px;} @media(max-width:768px){.settings-grid{grid-template-columns:1fr!important;} .preview-panel{display:none!important;}}`}</style>
 
       {/* Header */}
       <div style={{ padding:'20px 20px 0', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'10px' }}>
         <div>
           <h1 style={{ fontFamily:'Georgia,serif', fontSize:'22px', fontStyle:'italic', color:T.t1, marginBottom:'4px' }}>Settings</h1>
-          <p style={{ fontSize:'13px', color:T.t3 }}>Branding, contact info, and booking rules</p>
+          <p style={{ fontSize:'13px', color:T.t3 }}>Branding, contact info, notifications, and booking rules</p>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
           {saved && <span style={{ fontSize:'13px', color:'#1a6b4a' }}>✓ Saved</span>}
           <button onClick={save} disabled={saving || !fetched}
             style={{ padding:'8px 20px', background:T.isDark?'#F4C300':'#1a1917', color:T.isDark?'#000':'#fff', border:'none', borderRadius:'6px', fontSize:'13px', fontWeight:600, cursor:saving?'not-allowed':'pointer', opacity:saving||!fetched?0.5:1, fontFamily:'sans-serif' }}>
-            {saving?'Saving...':'Save changes'}
+            {saving ? 'Saving...' : 'Save changes'}
           </button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div style={{ background:T.card, borderBottom:`1px solid ${T.border}`, padding:'0 20px', display:'flex', marginTop:'16px', transition:'background 0.2s' }}>
-        {['branding','contact','booking'].map(t => (
+      <div style={{ background:T.card, borderBottom:`1px solid ${T.border}`, padding:'0 20px', display:'flex', marginTop:'16px', overflowX:'auto', transition:'background 0.2s' }}>
+        {TABS.map(t => (
           <button key={t} onClick={() => setTab(t)}
-            style={{ padding:'12px 16px', border:'none', borderBottom:`2px solid ${tab===t?T.t1:'transparent'}`, background:'transparent', fontSize:'13px', fontWeight:500, color:tab===t?T.t1:T.t3, cursor:'pointer', fontFamily:'sans-serif', textTransform:'capitalize' as any, transition:'color 0.2s' }}>
-            {t}
+            style={{ padding:'12px 16px', border:'none', borderBottom:`2px solid ${tab===t?T.t1:'transparent'}`, background:'transparent', fontSize:'13px', fontWeight:500, color:tab===t?T.t1:T.t3, cursor:'pointer', fontFamily:'sans-serif', textTransform:'capitalize', whiteSpace:'nowrap', transition:'color 0.2s' }}>
+            {t === 'notifications' ? '🔔 Notifications' : t.charAt(0).toUpperCase()+t.slice(1)}
           </button>
         ))}
       </div>
@@ -125,23 +130,28 @@ export default function SettingsPage() {
       ) : (
         <div className="settings-grid">
           <div>
-            {tab==='branding' && (
+
+            {/* ── BRANDING ── */}
+            {tab === 'branding' && (
               <>
                 <div style={card}>
                   <div style={cardTitle}>Business identity</div>
                   <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
-                    <div><label style={lbl}>Business name</label><input style={inp} value={bizName} onChange={e => setBizName(e.target.value)} /></div>
-                    <div><label style={lbl}>Tagline</label><input style={inp} value={form.tagline} onChange={e => update('tagline', e.target.value)} placeholder="e.g. Everything is no problem." /></div>
+                    <div>
+                      <label style={lbl}>Business name</label>
+                      <input style={inp} value={bizName} onChange={e => setBizName(e.target.value)} />
+                    </div>
+                    <div>
+                      <label style={lbl}>Tagline</label>
+                      <input style={inp} value={form.tagline} onChange={e => update('tagline', e.target.value)} placeholder="e.g. Everything is no problem." />
+                    </div>
                   </div>
                 </div>
 
                 <div style={card}>
                   <div style={cardTitle}>Colors</div>
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', marginBottom:'16px' }}>
-                    {[
-                      { key:'primary_color', label:'Primary color' },
-                      { key:'accent_color',  label:'Accent color' },
-                    ].map(f => (
+                    {[{key:'primary_color',label:'Primary color'},{key:'accent_color',label:'Accent color'}].map(f => (
                       <div key={f.key}>
                         <label style={lbl}>{f.label}</label>
                         <div style={{ display:'flex', alignItems:'center', gap:'10px', border:`1px solid ${T.inputBorder}`, borderRadius:'6px', padding:'8px 12px', background:T.input }}>
@@ -191,35 +201,113 @@ export default function SettingsPage() {
               </>
             )}
 
-            {tab==='contact' && (
+            {/* ── CONTACT ── */}
+            {tab === 'contact' && (
               <div style={card}>
                 <div style={cardTitle}>Contact information</div>
+                <p style={{ fontSize:'13px', color:T.t3, marginBottom:'16px' }}>
+                  Shown to customers on the booking page and confirmation emails.
+                </p>
                 <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
-                  {[{key:'phone',label:'Phone',ph:'(555) 000-0000'},{key:'email',label:'Email',ph:'hello@yourbusiness.com'},{key:'address_line1',label:'Address',ph:'123 Main St'},{key:'city',label:'City',ph:'Los Angeles'},{key:'state',label:'State',ph:'CA'}].map(f => (
-                    <div key={f.key}><label style={lbl}>{f.label}</label><input style={inp} value={(form as any)[f.key]} onChange={e => update(f.key, e.target.value)} placeholder={f.ph} /></div>
+                  {[
+                    {key:'phone',        label:'Business phone', ph:'(555) 000-0000',          hint:'Shown on the booking page'},
+                    {key:'email',        label:'Business email', ph:'hello@yourbusiness.com',   hint:'Shown on the booking page and customer emails'},
+                    {key:'address_line1',label:'Address',        ph:'123 Main St',              hint:''},
+                    {key:'city',         label:'City',           ph:'Los Angeles',              hint:''},
+                    {key:'state',        label:'State',          ph:'CA',                       hint:''},
+                  ].map(field => (
+                    <div key={field.key}>
+                      <label style={lbl}>{field.label}</label>
+                      <input style={inp} value={(form as any)[field.key]} onChange={e => update(field.key, e.target.value)} placeholder={field.ph} />
+                      {field.hint && <div style={hint}>{field.hint}</div>}
+                    </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {tab==='booking' && (
+            {/* ── NOTIFICATIONS ── */}
+            {tab === 'notifications' && (
+              <>
+                <div style={{ ...card, border:`1px solid ${T.isDark?'#2a3a5a':'#d0e4f7'}`, background:T.isDark?'#0a1a2a':T.card }}>
+                  <div style={cardTitle}>🔔 Owner notifications</div>
+                  <p style={{ fontSize:'13px', color:T.t3, marginBottom:'20px', lineHeight:1.6 }}>
+                    Where should we send booking alerts? These are private — not shown to customers. If left blank we'll use your business contact details above.
+                  </p>
+
+                  <div style={{ display:'flex', flexDirection:'column', gap:'16px' }}>
+                    <div>
+                      <label style={lbl}>Notification email</label>
+                      <input style={inp} type="email" value={form.notification_email} onChange={e => update('notification_email', e.target.value)} placeholder="you@gmail.com" />
+                      <div style={hint}>New booking requests and confirmation links are sent here. Use your personal email, not the business one.</div>
+                    </div>
+
+                    <div>
+                      <label style={lbl}>Notification phone (SMS)</label>
+                      <input style={inp} type="tel" value={form.notification_phone} onChange={e => update('notification_phone', e.target.value)} placeholder="(555) 000-0000" />
+                      <div style={hint}>You'll get a text for every new booking. Reply YES to confirm it instantly.</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status preview */}
+                <div style={{ ...card, background:T.isDark?'#111':'#f8f6f1' }}>
+                  <div style={cardTitle}>Current notification routing</div>
+                  <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
+                    {[
+                      {
+                        label: 'Email alerts going to',
+                        value: form.notification_email || form.email || 'Not set',
+                        ok:    !!(form.notification_email || form.email),
+                        note:  form.notification_email ? 'notification email' : form.email ? 'business email (fallback)' : '',
+                      },
+                      {
+                        label: 'SMS alerts going to',
+                        value: form.notification_phone || form.phone || 'Not set',
+                        ok:    !!(form.notification_phone || form.phone),
+                        note:  form.notification_phone ? 'notification phone' : form.phone ? 'business phone (fallback)' : '',
+                      },
+                    ].map(row => (
+                      <div key={row.label} style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'12px', padding:'12px', background:T.card, border:`1px solid ${T.border}`, borderRadius:'8px' }}>
+                        <div>
+                          <div style={{ fontSize:'11px', fontWeight:500, color:T.t3, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'4px' }}>{row.label}</div>
+                          <div style={{ fontSize:'13px', fontWeight:600, color:T.t1 }}>{row.value}</div>
+                          {row.note && <div style={{ fontSize:'11px', color:T.t3, marginTop:'2px' }}>via {row.note}</div>}
+                        </div>
+                        <div style={{ fontSize:'11px', fontWeight:600, padding:'3px 8px', borderRadius:'20px', background:row.ok?'#e8f5ee':'#fdf0ef', color:row.ok?'#1a6b4a':'#8c2820', flexShrink:0, whiteSpace:'nowrap' }}>
+                          {row.ok ? '✓ Set' : '✗ Not set'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ── BOOKING ── */}
+            {tab === 'booking' && (
               <div style={card}>
                 <div style={cardTitle}>Booking settings</div>
                 <div style={{ display:'flex', flexDirection:'column', gap:'14px' }}>
                   <div>
                     <label style={lbl}>Lead time (hours)</label>
                     <input style={inp} type="number" value={form.booking_lead_time_hours} onChange={e => update('booking_lead_time_hours', parseInt(e.target.value))} />
-                    <div style={{ fontSize:'11px', color:T.t3, marginTop:'4px' }}>Minimum hours before a customer can book</div>
+                    <div style={hint}>Minimum hours before a customer can book</div>
                   </div>
                   <div>
                     <label style={lbl}>Booking window (days)</label>
                     <input style={inp} type="number" value={form.booking_window_days} onChange={e => update('booking_window_days', parseInt(e.target.value))} />
-                    <div style={{ fontSize:'11px', color:T.t3, marginTop:'4px' }}>How far ahead customers can book</div>
+                    <div style={hint}>How far ahead customers can book</div>
                   </div>
                   <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
                     <input type="checkbox" id="autoconfirm" checked={form.auto_confirm_bookings} onChange={e => update('auto_confirm_bookings', e.target.checked)} style={{ width:'16px', height:'16px', accentColor:T.isDark?'#F4C300':'#1a1917' }} />
                     <label htmlFor="autoconfirm" style={{ fontSize:'13px', color:T.t1, cursor:'pointer' }}>Auto-confirm bookings</label>
                   </div>
+                  {form.auto_confirm_bookings && (
+                    <div style={{ background:T.isDark?'#0a1a2a':'#eef4fb', border:`1px solid ${T.isDark?'#1a3a5a':'#d0e4f7'}`, borderRadius:'6px', padding:'10px 14px', fontSize:'12px', color:T.isDark?'#5a9fd4':'#1e4d8c' }}>
+                      Auto-confirm is on — bookings will be marked confirmed immediately without requiring your approval.
+                    </div>
+                  )}
                   <div>
                     <label style={lbl}>Chatbot greeting</label>
                     <input style={inp} value={form.chatbot_greeting} onChange={e => update('chatbot_greeting', e.target.value)} placeholder="Hi! How can I help you today?" />
@@ -229,32 +317,34 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* Preview — hidden on mobile */}
+          {/* Live preview — branding tab only, hidden on mobile */}
           <div className="preview-panel">
-            <div style={{ position:'sticky', top:'20px' }}>
-              <div style={{ fontSize:'10px', fontWeight:500, textTransform:'uppercase' as any, letterSpacing:'0.07em', color:T.label, marginBottom:'10px' }}>Live preview</div>
-              <div style={{ border:`1px solid ${T.border}`, borderRadius:'8px', overflow:'hidden' }}>
-                <div style={{ background:'#111', padding:'10px 14px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                  <span style={{ color:pp, fontWeight:800, fontSize:'13px', textTransform:'uppercase' as any, fontFamily:pf }}>{bizName||'Your Business'}</span>
-                  <span style={{ background:pp, color:'#000', padding:'4px 10px', borderRadius:pr, fontSize:'10px', fontWeight:700, textTransform:'uppercase' as any }}>Book now</span>
-                </div>
-                <div style={{ background:'#0d0d0d', padding:'20px 16px' }}>
-                  <div style={{ fontSize:'26px', fontWeight:800, color:'#fff', textTransform:'uppercase' as any, lineHeight:1, marginBottom:'6px', fontFamily:pf }}>
-                    {bizName?.split(' ')[0]||'Your'}<br /><span style={{ color:pp }}>{bizName?.split(' ').slice(1).join(' ')||'Business'}</span>
+            {tab === 'branding' && (
+              <div style={{ position:'sticky', top:'20px' }}>
+                <div style={{ fontSize:'10px', fontWeight:500, textTransform:'uppercase' as any, letterSpacing:'0.07em', color:T.label, marginBottom:'10px' }}>Live preview</div>
+                <div style={{ border:`1px solid ${T.border}`, borderRadius:'8px', overflow:'hidden' }}>
+                  <div style={{ background:'#111', padding:'10px 14px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                    <span style={{ color:pp, fontWeight:800, fontSize:'13px', textTransform:'uppercase' as any, fontFamily:pf }}>{bizName||'Your Business'}</span>
+                    <span style={{ background:pp, color:'#000', padding:'4px 10px', borderRadius:pr, fontSize:'10px', fontWeight:700, textTransform:'uppercase' as any }}>Book now</span>
                   </div>
-                  <div style={{ fontSize:'11px', color:'#666', marginBottom:'14px' }}>{form.tagline||'Your tagline here'}</div>
-                  <div style={{ display:'inline-flex', padding:'8px 14px', background:pp, color:'#000', borderRadius:pr, fontSize:'11px', fontWeight:700, textTransform:'uppercase' as any, fontFamily:pf }}>⚡ Book a service</div>
-                </div>
-                <div style={{ padding:'12px', background:'#0a0a0a' }}>
-                  <div style={{ border:'1px solid #222', borderRadius:pr, padding:'12px', background:'#111', position:'relative', overflow:'hidden' }}>
-                    <div style={{ position:'absolute', top:0, left:0, right:0, height:'2px', background:pp }} />
-                    <div style={{ fontSize:'12px', fontWeight:700, color:'#fff', textTransform:'uppercase' as any, marginBottom:'4px', fontFamily:pf }}>Panel Upgrade</div>
-                    <div style={{ fontSize:'10px', color:'#666', marginBottom:'8px' }}>200A service, permitted and inspected.</div>
-                    <div style={{ fontSize:'11px', color:pp, fontWeight:600 }}>$1,500 · Full day</div>
+                  <div style={{ background:'#0d0d0d', padding:'20px 16px' }}>
+                    <div style={{ fontSize:'26px', fontWeight:800, color:'#fff', textTransform:'uppercase' as any, lineHeight:1, marginBottom:'6px', fontFamily:pf }}>
+                      {bizName?.split(' ')[0]||'Your'}<br /><span style={{ color:pp }}>{bizName?.split(' ').slice(1).join(' ')||'Business'}</span>
+                    </div>
+                    <div style={{ fontSize:'11px', color:'#666', marginBottom:'14px' }}>{form.tagline||'Your tagline here'}</div>
+                    <div style={{ display:'inline-flex', padding:'8px 14px', background:pp, color:'#000', borderRadius:pr, fontSize:'11px', fontWeight:700, textTransform:'uppercase' as any, fontFamily:pf }}>⚡ Book a service</div>
+                  </div>
+                  <div style={{ padding:'12px', background:'#0a0a0a' }}>
+                    <div style={{ border:'1px solid #222', borderRadius:pr, padding:'12px', background:'#111', position:'relative', overflow:'hidden' }}>
+                      <div style={{ position:'absolute', top:0, left:0, right:0, height:'2px', background:pp }} />
+                      <div style={{ fontSize:'12px', fontWeight:700, color:'#fff', textTransform:'uppercase' as any, marginBottom:'4px', fontFamily:pf }}>Panel Upgrade</div>
+                      <div style={{ fontSize:'10px', color:'#666', marginBottom:'8px' }}>200A service, permitted and inspected.</div>
+                      <div style={{ fontSize:'11px', color:pp, fontWeight:600 }}>$1,500 · Full day</div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}
