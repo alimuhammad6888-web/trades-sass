@@ -15,7 +15,7 @@ const NAV_ITEMS = [
   { label:'Overview',         href:'/dashboard',              icon:'📊', feature:null },
   { label:'Bookings',         href:'/dashboard/bookings',     icon:'📋', feature:null },
   { label:'Customers',        href:'/dashboard/customers',    icon:'👥', feature:null },
-  { label:'Services', href:'/dashboard/services', icon:'🛠️', feature:null },
+  { label:'Services',         href:'/dashboard/services',     icon:'🛠️',  feature:null },
   { label:'Schedule & Staff', href:'/dashboard/availability', icon:'📅', feature:null },
   { label:'Inbox',            href:'/dashboard/inbox',        icon:'📬', feature:'inbox' },
   { label:'Campaigns',        href:'/dashboard/campaigns',    icon:'📣', feature:'campaigns' },
@@ -32,11 +32,21 @@ export default function DashboardAppLayout({ children }: { children: React.React
   const [mobileOpen, setMobileOpen]   = useState(false)
   const [upgradeOpen, setUpgradeOpen] = useState(false)
   const [logoUrl, setLogoUrl]         = useState<string|null>(null)
-  const [theme, setThemeState]        = useState<'dark'|'light'>('dark')
   const [settingsId, setSettingsId]   = useState<string|null>(null)
 
+  // Single source of truth for theme — layout owns it, context reads it
+  const [theme, setThemeState] = useState<'dark'|'light'>('dark')
+
+  const setTheme = useCallback(async (t: 'dark'|'light') => {
+    setThemeState(t)
+    localStorage.setItem('dash-theme', t)
+    if (settingsId) {
+      await supabase.from('business_settings').update({ dashboard_theme: t }).eq('id', settingsId)
+    }
+  }, [settingsId])
+
   useEffect(() => {
-    // Apply theme immediately from localStorage to avoid flash
+    // Apply from localStorage immediately to prevent flash
     const saved = localStorage.getItem('dash-theme') as 'dark'|'light'|null
     if (saved) setThemeState(saved)
 
@@ -76,25 +86,20 @@ export default function DashboardAppLayout({ children }: { children: React.React
         plan:     tenantData.plan,
         features: { ...DEFAULT_FEATURES, ...(settings?.features ?? {}) },
       })
-      if (settings?.logo_url)    setLogoUrl(settings.logo_url)
-      if (settings?.id)          setSettingsId(settings.id)
+
+      if (settings?.logo_url) setLogoUrl(settings.logo_url)
+      if (settings?.id)       setSettingsId(settings.id)
+
+      // DB value wins — update both state and localStorage
       if (settings?.dashboard_theme) {
         setThemeState(settings.dashboard_theme)
         localStorage.setItem('dash-theme', settings.dashboard_theme)
       }
+
       setLoading(false)
     }
     init()
   }, [])
-
-  const handleThemeChange = useCallback(async (t: 'dark'|'light') => {
-    setThemeState(t)
-    localStorage.setItem('dash-theme', t)
-    // Persist to DB
-    if (settingsId) {
-      await supabase.from('business_settings').update({ dashboard_theme: t }).eq('id', settingsId)
-    }
-  }, [settingsId])
 
   function toggleCollapse() {
     const next = !collapsed
@@ -112,15 +117,21 @@ export default function DashboardAppLayout({ children }: { children: React.React
     return pathname.startsWith(href)
   }
 
-  // Theme tokens for sidebar
-  const S = theme === 'dark' ? {
-    bg: '#111', border: '#1a1a1a', activeBg: '#1e1e1e',
-    text: '#aaa', activeText: '#fff', subtext: '#555',
-    logoBg: '#F4C300', logoText: '#000',
-  } : {
-    bg: '#fff', border: '#e8e4dc', activeBg: '#f0ede6',
-    text: '#9a9590', activeText: '#1a1917', subtext: '#c8c4bc',
-    logoBg: '#1a1917', logoText: '#fff',
+  // Sidebar tokens derived from the single theme state
+  const dark = theme === 'dark'
+  const S = {
+    bg:          dark ? '#111111' : '#ffffff',
+    border:      dark ? '#1a1a1a' : '#e8e4dc',
+    activeBg:    dark ? '#1e1e1e' : '#f0ede6',
+    hoverBg:     dark ? '#161616' : '#f8f5f0',
+    text:        dark ? '#aaaaaa' : '#9a9590',
+    activeText:  dark ? '#ffffff' : '#1a1917',
+    subtext:     dark ? '#555555' : '#c8c4bc',
+    logoBg:      dark ? '#F4C300' : '#1a1917',
+    logoText:    dark ? '#000000' : '#ffffff',
+    contentBg:   dark ? '#0f0f0f' : '#f4f2ee',
+    topbarBg:    dark ? '#111111' : '#ffffff',
+    topbarBorder:dark ? '#1a1a1a' : '#e8e4dc',
   }
 
   const Sidebar = ({ mobile = false }: { mobile?: boolean }) => {
@@ -133,7 +144,7 @@ export default function DashboardAppLayout({ children }: { children: React.React
           {logoUrl ? (
             <img src={logoUrl} alt="logo" style={{ width:'34px', height:'34px', borderRadius:'6px', objectFit:'cover', flexShrink:0 }} />
           ) : (
-            <div style={{ width:'34px', height:'34px', borderRadius:'8px', background:S.logoBg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', fontWeight:800, color:S.logoText, flexShrink:0, fontFamily:'Barlow Condensed,sans-serif' }}>
+            <div style={{ width:'34px', height:'34px', borderRadius:'8px', background:S.logoBg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', fontWeight:800, color:S.logoText, flexShrink:0, fontFamily:'Barlow Condensed,sans-serif', transition:'background 0.2s, color 0.2s' }}>
               {tenant?.name?.[0] ?? '⚡'}
             </div>
           )}
@@ -142,12 +153,12 @@ export default function DashboardAppLayout({ children }: { children: React.React
               <div style={{ fontSize:'14px', fontWeight:700, color:S.activeText, fontFamily:'Barlow Condensed,sans-serif', textTransform:'uppercase', letterSpacing:'0.04em', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', transition:'color 0.2s' }}>
                 {tenant?.name ?? '...'}
               </div>
-              <div style={{ fontSize:'11px', color:S.subtext, marginTop:'1px' }}>Owner dashboard</div>
+              <div style={{ fontSize:'11px', color:S.subtext, marginTop:'1px', transition:'color 0.2s' }}>Owner dashboard</div>
             </div>
           )}
         </div>
 
-        {/* Nav */}
+        {/* Nav items */}
         <nav style={{ flex:1, padding:'10px 8px', overflowY:'auto' }}>
           {NAV_ITEMS.map(item => {
             const locked = item.feature && tenant && !tenant.features[item.feature as keyof typeof tenant.features]
@@ -173,7 +184,7 @@ export default function DashboardAppLayout({ children }: { children: React.React
                 onClick={() => setMobileOpen(false)}
                 title={!labels ? item.label : undefined}
                 style={{ display:'flex', alignItems:'center', gap:'10px', padding:labels?'10px 12px':'10px 0', justifyContent:labels?'flex-start':'center', background:active?S.activeBg:'transparent', borderRadius:'8px', textDecoration:'none', marginBottom:'2px', transition:'background 0.15s', borderLeft:active?'3px solid #F4C300':'3px solid transparent' }}
-                onMouseEnter={e => { if(!active) e.currentTarget.style.background=theme==='dark'?'#161616':'#f8f5f0' }}
+                onMouseEnter={e => { if(!active) e.currentTarget.style.background=S.hoverBg }}
                 onMouseLeave={e => { if(!active) e.currentTarget.style.background='transparent' }}>
                 <span style={{ fontSize:'18px', flexShrink:0, lineHeight:1 }}>{item.icon}</span>
                 {labels && (
@@ -191,24 +202,24 @@ export default function DashboardAppLayout({ children }: { children: React.React
           {labels && (
             <a href="/" target="_blank"
               style={{ display:'flex', alignItems:'center', gap:'10px', padding:'9px 12px', borderRadius:'8px', textDecoration:'none', marginBottom:'2px', transition:'background 0.15s' }}
-              onMouseEnter={e => e.currentTarget.style.background=theme==='dark'?'#161616':'#f8f5f0'}
+              onMouseEnter={e => e.currentTarget.style.background=S.hoverBg}
               onMouseLeave={e => e.currentTarget.style.background='transparent'}>
               <span style={{ fontSize:'18px', lineHeight:1 }}>🌐</span>
-              <span style={{ fontSize:'13px', color:S.subtext, fontWeight:500 }}>View site</span>
+              <span style={{ fontSize:'13px', color:S.subtext, fontWeight:500, transition:'color 0.2s' }}>View site</span>
             </a>
           )}
           <button onClick={signOut}
             title={!labels?'Sign out':undefined}
             style={{ width:'100%', display:'flex', alignItems:'center', gap:'10px', padding:labels?'9px 12px':'10px 0', justifyContent:labels?'flex-start':'center', background:'transparent', border:'none', borderRadius:'8px', cursor:'pointer', fontFamily:'DM Sans,sans-serif', marginBottom:'2px', transition:'background 0.15s' }}
-            onMouseEnter={e => e.currentTarget.style.background=theme==='dark'?'#161616':'#f8f5f0'}
+            onMouseEnter={e => e.currentTarget.style.background=S.hoverBg}
             onMouseLeave={e => e.currentTarget.style.background='transparent'}>
             <span style={{ fontSize:'18px', lineHeight:1 }}>🚪</span>
-            {labels && <span style={{ fontSize:'13px', color:S.subtext, fontWeight:500 }}>Sign out</span>}
+            {labels && <span style={{ fontSize:'13px', color:S.subtext, fontWeight:500, transition:'color 0.2s' }}>Sign out</span>}
           </button>
           {!mobile && (
             <button onClick={toggleCollapse}
               style={{ width:'100%', display:'flex', alignItems:'center', gap:'10px', padding:labels?'9px 12px':'10px 0', justifyContent:labels?'flex-start':'center', background:'transparent', border:'none', borderRadius:'8px', cursor:'pointer', fontFamily:'DM Sans,sans-serif', transition:'background 0.15s' }}
-              onMouseEnter={e => e.currentTarget.style.background=theme==='dark'?'#161616':'#f8f5f0'}
+              onMouseEnter={e => e.currentTarget.style.background=S.hoverBg}
               onMouseLeave={e => e.currentTarget.style.background='transparent'}>
               <span style={{ fontSize:'14px', display:'inline-block', transform:collapsed?'rotate(180deg)':'none', transition:'transform 0.2s', color:S.subtext }}>◀</span>
               {labels && <span style={{ fontSize:'12px', color:S.subtext, fontWeight:500 }}>Collapse</span>}
@@ -220,7 +231,7 @@ export default function DashboardAppLayout({ children }: { children: React.React
   }
 
   return (
-    <TenantProvider tenant={tenant} loading={loading} initialTheme={theme} onThemeChange={handleThemeChange}>
+    <TenantProvider tenant={tenant} loading={loading} theme={theme} setTheme={setTheme}>
       <style suppressHydrationWarning>{`
         @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -229,11 +240,16 @@ export default function DashboardAppLayout({ children }: { children: React.React
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
         @keyframes slideIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
-        @media (max-width: 768px) { .desktop-sidebar { display: none !important; } .mobile-topbar { display: flex !important; } }
-        @media (min-width: 769px) { .mobile-topbar { display: none !important; } }
+        @media (max-width: 768px) {
+          .desktop-sidebar { display: none !important; }
+          .mobile-topbar   { display: flex !important; }
+        }
+        @media (min-width: 769px) {
+          .mobile-topbar { display: none !important; }
+        }
       `}</style>
 
-      <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:theme==='dark'?'#0f0f0f':'#f4f2ee', transition:'background 0.2s' }}>
+      <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:S.contentBg, transition:'background 0.2s' }}>
 
         {/* Desktop sidebar */}
         <div className="desktop-sidebar" style={{ width:collapsed?'60px':'220px', flexShrink:0, borderRight:`1px solid ${S.border}`, display:'flex', flexDirection:'column', transition:'width 0.2s ease', overflow:'hidden', height:'100vh', position:'sticky', top:0 }}>
@@ -241,9 +257,9 @@ export default function DashboardAppLayout({ children }: { children: React.React
         </div>
 
         {/* Mobile topbar */}
-        <div className="mobile-topbar" style={{ display:'none', position:'fixed', top:0, left:0, right:0, height:'52px', background:S.bg, borderBottom:`1px solid ${S.border}`, zIndex:50, alignItems:'center', padding:'0 16px', gap:'12px', transition:'background 0.2s' }}>
+        <div className="mobile-topbar" style={{ display:'none', position:'fixed', top:0, left:0, right:0, height:'52px', background:S.topbarBg, borderBottom:`1px solid ${S.topbarBorder}`, zIndex:50, alignItems:'center', padding:'0 16px', gap:'12px', transition:'background 0.2s' }}>
           <button onClick={() => setMobileOpen(true)} style={{ background:'none', border:'none', color:S.activeText, fontSize:'22px', cursor:'pointer', padding:'4px', lineHeight:1 }}>☰</button>
-          <span style={{ fontFamily:'Barlow Condensed', fontSize:'18px', fontWeight:800, textTransform:'uppercase', letterSpacing:'0.05em', color:S.activeText }}>
+          <span style={{ fontFamily:'Barlow Condensed', fontSize:'18px', fontWeight:800, textTransform:'uppercase', letterSpacing:'0.05em', color:S.activeText, transition:'color 0.2s' }}>
             {tenant?.name ?? 'Dashboard'}
           </span>
         </div>
@@ -258,7 +274,7 @@ export default function DashboardAppLayout({ children }: { children: React.React
           </div>
         )}
 
-        {/* Content */}
+        {/* Page content */}
         <div style={{ flex:1, overflowY:'auto', overflowX:'hidden' }}>
           <style>{`@media (max-width: 768px) { .mob-pad { padding-top: 52px !important; } }`}</style>
           <div className="mob-pad">{children}</div>
@@ -273,7 +289,7 @@ export default function DashboardAppLayout({ children }: { children: React.React
             onClick={e => e.stopPropagation()}>
             <button onClick={() => setUpgradeOpen(false)} style={{ float:'right', background:'none', border:'none', fontSize:'20px', cursor:'pointer', color:'#9a9590' }}>×</button>
             <div style={{ fontSize:'11px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'#9a5c10', background:'#fef4e0', padding:'4px 12px', borderRadius:'20px', display:'inline-block', marginBottom:'16px' }}>Pro feature</div>
-            <h2 style={{ fontFamily:'Georgia, serif', fontSize:'20px', fontStyle:'italic', marginBottom:'8px' }}>Upgrade to unlock</h2>
+            <h2 style={{ fontFamily:'Georgia,serif', fontSize:'20px', fontStyle:'italic', marginBottom:'8px' }}>Upgrade to unlock</h2>
             <p style={{ fontSize:'14px', color:'#9a9590', lineHeight:1.6, marginBottom:'20px' }}>Available on the Pro plan at $99/month.</p>
             <button onClick={() => setUpgradeOpen(false)} style={{ width:'100%', padding:'11px', background:'#1a1917', color:'#fff', border:'none', borderRadius:'6px', fontSize:'14px', fontWeight:500, cursor:'pointer', fontFamily:'sans-serif' }}>
               Contact us to upgrade
