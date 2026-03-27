@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { label:'Overview',         href:'/dashboard',              icon:'📊', feature:null },
   { label:'Bookings',         href:'/dashboard/bookings',     icon:'📋', feature:null },
   { label:'Customers',        href:'/dashboard/customers',    icon:'👥', feature:null },
+  { label:'Services', href:'/dashboard/services', icon:'🛠️', feature:null },
   { label:'Schedule & Staff', href:'/dashboard/availability', icon:'📅', feature:null },
   { label:'Inbox',            href:'/dashboard/inbox',        icon:'📬', feature:'inbox' },
   { label:'Campaigns',        href:'/dashboard/campaigns',    icon:'📣', feature:'campaigns' },
