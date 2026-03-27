@@ -13,29 +13,45 @@ const STATUS_COLOR: any = { pending:'#9a5c10', confirmed:'#1a6b4a', completed:'#
 
 export default function OverviewPage() {
   const { tenant } = useTenant()
-  const [kpis, setKpis]       = useState<any>(null)
-  const [recent, setRecent]   = useState<any[]>([])
-  const [dark, setDark]       = useState(true)
+  const [kpis, setKpis]     = useState<any>(null)
+  const [recent, setRecent] = useState<any[]>([])
+  const [dark, setDark]     = useState(true)
 
   useEffect(() => {
     const saved = localStorage.getItem('dash-theme')
     if (saved === 'light') setDark(false)
   }, [])
 
-  // Fetch data as soon as tenant is available — no blocking
   useEffect(() => {
     if (!tenant?.id) return
     async function load() {
       const tid = tenant!.id
-      const [b1, b2, c1, b3, rec] = await Promise.all([
+      const now = new Date()
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
+      const todayEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString()
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+
+      const [b1, b2, b3, b4, rec] = await Promise.all([
+        // Total bookings all time
         supabase.from('bookings').select('id', { count:'exact', head:true }).eq('tenant_id', tid),
-        supabase.from('bookings').select('id', { count:'exact', head:true }).eq('tenant_id', tid).in('status', ['confirmed','pending']).gte('starts_at', new Date().toISOString()),
-        supabase.from('customers').select('id', { count:'exact', head:true }).eq('tenant_id', tid),
-        supabase.from('bookings').select('price_cents, status').eq('tenant_id', tid),
-        supabase.from('bookings').select('id, status, starts_at, customers(first_name, last_name), services(name)').eq('tenant_id', tid).order('starts_at', { ascending:false }).limit(6),
+        // Upcoming (future confirmed/pending)
+        supabase.from('bookings').select('id', { count:'exact', head:true }).eq('tenant_id', tid).in('status', ['confirmed','pending']).gte('starts_at', now.toISOString()),
+        // Monthly revenue (completed this month)
+        supabase.from('bookings').select('price_cents').eq('tenant_id', tid).eq('status', 'completed').gte('starts_at', monthStart),
+        // Today's remaining jobs (confirmed/pending today)
+        supabase.from('bookings').select('id', { count:'exact', head:true }).eq('tenant_id', tid).in('status', ['confirmed','pending']).gte('starts_at', todayStart).lte('starts_at', todayEnd),
+        // Recent bookings for the feed
+        supabase.from('bookings').select('id, status, starts_at, customers(first_name, last_name), services(name)').eq('tenant_id', tid).order('created_at', { ascending:false }).limit(6),
       ])
-      const revenue = (b3.data ?? []).filter((b:any) => b.status==='completed').reduce((s:number,b:any) => s+(b.price_cents??0), 0)
-      setKpis({ bookings:b1.count??0, upcoming:b2.count??0, customers:c1.count??0, revenue })
+
+      const monthRevenue = (b3.data ?? []).reduce((s: number, b: any) => s + (b.price_cents ?? 0), 0)
+
+      setKpis({
+        totalBookings:  b1.count ?? 0,
+        upcoming:       b2.count ?? 0,
+        monthRevenue,
+        todayRemaining: b4.count ?? 0,
+      })
       setRecent(rec.data ?? [])
     }
     load()
@@ -51,16 +67,61 @@ export default function OverviewPage() {
     statusBg:{ pending:'#fef4e0', confirmed:'#e8f5ee', completed:'#eef4fb', cancelled:'#fdf0ef' },
   }
 
-  // Page renders immediately — kpis === null means data is loading
+  const kpiCards = [
+    { label:'Total bookings',    value: kpis ? String(kpis.totalBookings)                                    : null },
+    { label:'Upcoming',          value: kpis ? String(kpis.upcoming)                                         : null },
+    { label:'Month revenue',     value: kpis ? '$' + (kpis.monthRevenue / 100).toFixed(0)                   : null },
+    { label:"Today's remaining", value: kpis ? String(kpis.todayRemaining)                                   : null },
+  ]
+
+  const quickLinks = [
+    { label:'New booking',         href:'/book',                   icon:'➕' },
+    { label:'Manage bookings',     href:'/dashboard/bookings',     icon:'📋' },
+    { label:'View customers',      href:'/dashboard/customers',    icon:'👥' },
+    { label:'Staff & schedule',    href:'/dashboard/availability', icon:'📅' },
+    { label:'Branding & settings', href:'/dashboard/settings',     icon:'⚙️' },
+  ]
+
   return (
     <div style={{ minHeight:'100vh', background:T.bg, fontFamily:"'DM Sans', sans-serif", transition:'background 0.2s' }}>
       <style suppressHydrationWarning>{`
         @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap');
         @keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:0.7} }
+
+        .kpi-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 12px;
+          margin-bottom: 28px;
+        }
+        .main-grid {
+          display: grid;
+          grid-template-columns: 1fr 260px;
+          gap: 20px;
+          align-items: start;
+        }
+        .quick-links {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        @media (max-width: 768px) {
+          .kpi-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
+          .main-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .quick-links {
+            display: grid !important;
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
+        }
       `}</style>
 
       {/* Top strip */}
-      <div style={{ padding:'0 28px', height:'52px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:`1px solid ${T.border}` }}>
+      <div style={{ padding:'0 20px', height:'52px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:`1px solid ${T.border}` }}>
         <div>
           <div style={{ fontFamily:'Barlow Condensed', fontSize:'20px', fontWeight:800, textTransform:'uppercase', color:T.t1 }}>Overview</div>
           <div style={{ fontSize:'11px', color:T.t3 }}>{new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' })}</div>
@@ -72,49 +133,44 @@ export default function OverviewPage() {
         </button>
       </div>
 
-      <div style={{ padding:'24px 28px', maxWidth:'900px' }}>
+      <div style={{ padding:'20px' }}>
 
-        {/* KPIs — skeleton if no data yet */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'12px', marginBottom:'28px' }}>
-          {[
-            { label:'Total bookings', value:kpis?.bookings },
-            { label:'Upcoming',       value:kpis?.upcoming },
-            { label:'Customers',      value:kpis?.customers },
-            { label:'Revenue',        value:kpis ? '$'+((kpis.revenue??0)/100).toFixed(0) : null },
-          ].map((k,i) => (
-            <div key={k.label} style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:'12px', padding:'20px 22px' }}>
-              <div style={{ fontSize:'11px', fontWeight:500, textTransform:'uppercase', letterSpacing:'0.08em', color:T.t3, marginBottom:'10px' }}>{k.label}</div>
+        {/* KPIs */}
+        <div className="kpi-grid">
+          {kpiCards.map((k, i) => (
+            <div key={k.label} style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:'12px', padding:'16px 18px' }}>
+              <div style={{ fontSize:'10px', fontWeight:500, textTransform:'uppercase', letterSpacing:'0.08em', color:T.t3, marginBottom:'8px' }}>{k.label}</div>
               {k.value == null
-                ? <div style={{ width:'60px', height:'36px', background:dark?'#222':'#ece8e0', borderRadius:'6px', animation:'pulse 1.5s ease infinite' }} />
-                : <div style={{ fontFamily:'Barlow Condensed', fontSize:'36px', fontWeight:800, color:T.t1, lineHeight:1 }}>{k.value}</div>
+                ? <div style={{ width:'60px', height:'32px', background:dark?'#222':'#ece8e0', borderRadius:'6px', animation:'pulse 1.5s ease infinite' }} />
+                : <div style={{ fontFamily:'Barlow Condensed', fontSize:'32px', fontWeight:800, color:T.t1, lineHeight:1 }}>{k.value}</div>
               }
             </div>
           ))}
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 260px', gap:'20px', alignItems:'start' }}>
+        {/* Main grid */}
+        <div className="main-grid">
 
           {/* Recent bookings */}
           <div>
             <div style={{ fontSize:'10px', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.14em', color:T.label, marginBottom:'10px' }}>Recent bookings</div>
             <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:'12px', overflow:'hidden' }}>
               {recent.length === 0 && kpis === null ? (
-                // Skeleton rows
                 [1,2,3,4].map(i => (
                   <div key={i} style={{ padding:'14px 20px', borderBottom:`1px solid ${T.divider}`, display:'flex', gap:'12px', alignItems:'center' }}>
                     <div style={{ flex:1 }}>
-                      <div style={{ width:'120px', height:'13px', background:dark?'#222':'#ece8e0', borderRadius:'4px', marginBottom:'6px', animation:'pulse 1.5s ease infinite' }} />
-                      <div style={{ width:'80px', height:'11px', background:dark?'#1e1e1e':'#f0ede6', borderRadius:'4px', animation:'pulse 1.5s ease infinite' }} />
+                      <div style={{ width:'120px', height:'12px', background:dark?'#222':'#ece8e0', borderRadius:'4px', marginBottom:'6px', animation:'pulse 1.5s ease infinite' }} />
+                      <div style={{ width:'80px', height:'10px', background:dark?'#1e1e1e':'#f0ede6', borderRadius:'4px', animation:'pulse 1.5s ease infinite' }} />
                     </div>
-                    <div style={{ width:'60px', height:'20px', background:dark?'#1e1e1e':'#f0ede6', borderRadius:'10px', animation:'pulse 1.5s ease infinite' }} />
+                    <div style={{ width:'60px', height:'18px', background:dark?'#1e1e1e':'#f0ede6', borderRadius:'10px', animation:'pulse 1.5s ease infinite' }} />
                   </div>
                 ))
               ) : recent.length === 0 ? (
                 <div style={{ padding:'40px', textAlign:'center', fontSize:'13px', color:T.t3, fontStyle:'italic' }}>
-                  No bookings yet — share your booking link to get started
+                  No bookings yet
                 </div>
-              ) : recent.map((b:any) => (
-                <div key={b.id} style={{ display:'flex', alignItems:'center', padding:'14px 20px', borderBottom:`1px solid ${T.divider}`, gap:'12px', transition:'background 0.15s', cursor:'default' }}
+              ) : recent.map((b: any) => (
+                <div key={b.id} style={{ display:'flex', alignItems:'center', padding:'13px 20px', borderBottom:`1px solid ${T.divider}`, gap:'12px' }}
                   onMouseEnter={e => e.currentTarget.style.background=T.hover}
                   onMouseLeave={e => e.currentTarget.style.background='transparent'}>
                   <div style={{ flex:1, minWidth:0 }}>
@@ -122,18 +178,18 @@ export default function OverviewPage() {
                       {b.customers?.first_name} {b.customers?.last_name}
                     </div>
                     <div style={{ fontSize:'11px', color:T.t3, marginTop:'2px' }}>
-                      {b.services?.name} · {new Date(b.starts_at).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })}
+                      {b.services?.name} · {new Date(b.starts_at).toLocaleDateString('en-US', { month:'short', day:'numeric' })}
                     </div>
                   </div>
-                  <span style={{ fontSize:'10px', fontWeight:600, padding:'3px 9px', borderRadius:'20px', background:(T.statusBg as any)[b.status]??T.card, color:STATUS_COLOR[b.status]??T.t3, textTransform:'uppercase', letterSpacing:'0.04em', flexShrink:0 }}>
+                  <span style={{ fontSize:'10px', fontWeight:600, padding:'3px 8px', borderRadius:'20px', background:(T.statusBg as any)[b.status]??T.card, color:STATUS_COLOR[b.status]??T.t3, textTransform:'uppercase', letterSpacing:'0.04em', flexShrink:0, whiteSpace:'nowrap' }}>
                     {b.status}
                   </span>
                 </div>
               ))}
               <a href="/dashboard/bookings"
-                style={{ display:'block', textAlign:'center', fontSize:'12px', color:T.t3, textDecoration:'none', padding:'12px 20px', borderTop:`1px solid ${T.divider}`, transition:'color 0.15s, background 0.15s' }}
-                onMouseEnter={e => { e.currentTarget.style.color=T.t1; e.currentTarget.style.background=T.hover }}
-                onMouseLeave={e => { e.currentTarget.style.color=T.t3; e.currentTarget.style.background='transparent' }}>
+                style={{ display:'block', textAlign:'center', fontSize:'12px', color:T.t3, textDecoration:'none', padding:'12px 20px', borderTop:`1px solid ${T.divider}`, transition:'color 0.15s' }}
+                onMouseEnter={e => e.currentTarget.style.color=T.t1}
+                onMouseLeave={e => e.currentTarget.style.color=T.t3}>
                 View all bookings →
               </a>
             </div>
@@ -142,14 +198,8 @@ export default function OverviewPage() {
           {/* Quick links */}
           <div>
             <div style={{ fontSize:'10px', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.14em', color:T.label, marginBottom:'10px' }}>Quick actions</div>
-            <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
-              {[
-                { label:'New booking',         href:'/book',                   icon:'➕' },
-                { label:'Manage bookings',     href:'/dashboard/bookings',     icon:'📋' },
-                { label:'View customers',      href:'/dashboard/customers',    icon:'👥' },
-                { label:'Staff & schedule',    href:'/dashboard/availability', icon:'📅' },
-                { label:'Branding & settings', href:'/dashboard/settings',     icon:'⚙️' },
-              ].map(q => (
+            <div className="quick-links">
+              {quickLinks.map(q => (
                 <a key={q.label} href={q.href}
                   style={{ display:'flex', alignItems:'center', gap:'10px', padding:'11px 14px', background:T.card, border:`1px solid ${T.border}`, borderRadius:'8px', textDecoration:'none', transition:'border-color 0.15s, background 0.15s' }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor=dark?'#444':'#1a1917'; e.currentTarget.style.background=T.hover }}
@@ -174,6 +224,7 @@ export default function OverviewPage() {
               </div>
             </div>
           </div>
+
         </div>
       </div>
     </div>
