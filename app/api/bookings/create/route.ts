@@ -90,9 +90,8 @@ export async function POST(req: NextRequest) {
       .from('bookings')
       .select('id')
       .eq('tenant_id', tenantId)
+      .eq('starts_at', starts.toISOString())
       .in('status', ['pending', 'confirmed'])
-      .lt('starts_at', ends.toISOString())
-      .gt('ends_at', starts.toISOString())
       .limit(1)
 
     if (conflicts && conflicts.length > 0) {
