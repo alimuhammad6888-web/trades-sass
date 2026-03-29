@@ -8,12 +8,6 @@
 
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 type Tenant  = { id:string; name:string; slug:string; tagline?:string; primary_color?:string }
 type Service = { id:string; name:string; description:string; duration_mins:number; price_cents:number|null }
@@ -61,26 +55,24 @@ export default function BookSlugPage() {
   const [bookingRef, setBookingRef]     = useState('')
   const [notifySent, setNotifySent]     = useState(false)
 
-  // ── Load tenant by slug ───────────────────────────────────────
+  // ── Load tenant + services by slug ────────────────────────────
   useEffect(() => {
     if (!slug) return
-    supabase.from('tenants').select('id, name, slug').eq('slug', slug).single()
-      .then(({ data, error }) => {
-        if (error || !data) { setTenantError('Business not found'); return }
-        // Also load business_settings for branding
-        supabase.from('business_settings').select('tagline, primary_color').eq('tenant_id', data.id).single()
-          .then(({ data: settings }) => {
-            setTenant({ ...data, tagline: settings?.tagline, primary_color: settings?.primary_color })
-          })
+
+    fetch(`/api/public/tenant-by-slug?slug=${encodeURIComponent(slug)}`)
+      .then(r => {
+        if (!r.ok) throw new Error('not found')
+        return r.json()
+      })
+      .then(data => {
+        setTenant(data.tenant)
+        setServices(data.services ?? [])
+        setTenantError('')
+      })
+      .catch(() => {
+        setTenantError('Business not found')
       })
   }, [slug])
-
-  // ── Load services once tenant is resolved ─────────────────────
-  useEffect(() => {
-    if (!tenant?.id) return
-    supabase.from('services').select('*').eq('tenant_id', tenant.id).eq('is_active', true).order('display_order')
-      .then(({ data }) => setServices(data ?? []))
-  }, [tenant?.id])
 
   function validate() {
     const e: any = {}

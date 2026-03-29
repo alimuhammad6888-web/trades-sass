@@ -88,7 +88,10 @@ export default function NewTenantPage() {
     try {
       const res = await fetch('/api/admin/tenants/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-key': 'supersecret123',
+        },
         body: JSON.stringify(form),
       })
       const data = await res.json()

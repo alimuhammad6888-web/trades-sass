@@ -4,12 +4,6 @@
 // Internal admin portal — lists all tenants with status and quick actions.
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 type Tenant = {
   id: string
@@ -39,14 +33,15 @@ export default function AdminPage() {
   const [loading, setLoading]   = useState(true)
 
   useEffect(() => {
-    supabase
-      .from('tenants')
-      .select('id, slug, name, plan, is_active, created_at')
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setTenants(data ?? [])
+    fetch('/api/admin/tenants/list', {
+      headers: { 'x-admin-key': 'supersecret123' }
+    })
+      .then(r => r.json())
+      .then(data => {
+        setTenants(data.tenants ?? [])
         setLoading(false)
       })
+      .catch(() => setLoading(false))
   }, [])
 
   return (
