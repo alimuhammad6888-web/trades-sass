@@ -159,6 +159,24 @@ export default function BookSlugPage() {
   )
 
   // ── Tenant error state ────────────────────────────────────────
+  if (tenant && services.length === 0) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#0d0d0d', color: '#fff', fontFamily: 'sans-serif' }}>
+        <div style={{ padding: '40px', textAlign: 'center' }}>
+          <h2 style={{ color: '#F4C300', fontFamily: 'Georgia,serif' }}>
+            {tenant.name}
+          </h2>
+          <p style={{ marginTop: '10px', color: '#888' }}>
+            This business is not accepting online bookings yet.
+          </p>
+          <p style={{ marginTop: '6px', fontSize: '13px', color: '#666' }}>
+            Please check back later or contact them directly.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   if (tenantError) return (
     <div style={page}>
       <div style={headerS}>
