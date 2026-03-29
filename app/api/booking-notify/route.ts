@@ -13,9 +13,9 @@ function fmtTime(iso: string) { return new Date(iso).toLocaleTimeString('en-US',
 function fmtPrice(cents: number|null) { return cents ? '$'+(cents/100).toFixed(0) : 'Quote on request' }
 function fmtDuration(mins: number) { if(mins<60)return`${mins} min`;const h=Math.floor(mins/60),m=mins%60;return m>0?`${h}h ${m}m`:`${h}h` }
 
-function makeToken(bookingId: string) {
+function makeToken(bookingId: string, exp: string) {
   return crypto.createHmac('sha256', process.env.CRON_SECRET ?? 'secret')
-    .update(bookingId).digest('hex').slice(0, 16)
+    .update(`${bookingId}:${exp}`).digest('hex').slice(0, 16)
 }
 
 async function sendEmail({ to, subject, html, text }: { to:string; subject:string; html:string; text:string }) {
@@ -78,8 +78,9 @@ export async function POST(req: NextRequest) {
     const bizName   = tenant?.name ?? 'Your service provider'
     const accent    = settings?.primary_color ?? '#F4C300'
     const baseUrl   = process.env.NEXT_PUBLIC_APP_URL ?? 'https://trades-sass.vercel.app'
-    const token     = makeToken(bookingId)
-    const confirmUrl = `${baseUrl}/api/booking-confirm?id=${bookingId}&token=${token}`
+    const exp       = String(Date.now() + 72 * 60 * 60 * 1000)
+    const token     = makeToken(bookingId, exp)
+    const confirmUrl = `${baseUrl}/api/booking-confirm?id=${bookingId}&token=${token}&exp=${exp}`
     const bookingRef = bookingId.slice(0, 8).toUpperCase()
     const dateStr   = fmtDate(booking.starts_at)
     const timeStr   = fmtTime(booking.starts_at)
