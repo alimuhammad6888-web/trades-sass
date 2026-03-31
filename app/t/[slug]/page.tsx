@@ -445,6 +445,7 @@ export default function LandingPage() {
             </a>
           </div>
 
+          {services.length > 0 ? (
           <div className="services-grid">
             {services.map((sv) => (
               <a href={`/book/${slug}`} key={sv.id} className="service-card" style={{ textDecoration: 'none' }}>
@@ -457,6 +458,25 @@ export default function LandingPage() {
               </a>
             ))}
           </div>
+          ) : (
+            <div style={{ border: '1px solid #1a1a1a', borderRadius: '12px', padding: '60px 40px', textAlign: 'center' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔧</div>
+              <h3 style={{ fontFamily: 'Barlow Condensed', fontSize: '24px', fontWeight: 700, textTransform: 'uppercase', color: '#fff', marginBottom: '8px' }}>
+                Services coming soon
+              </h3>
+              <p style={{ fontSize: '14px', color: '#555', lineHeight: 1.6, maxWidth: '400px', margin: '0 auto 24px' }}>
+                We're setting up our online booking. In the meantime, give us a call to schedule your appointment.
+              </p>
+              {tenant?.phone && (
+                <a
+                  href={`tel:${tenant.phone.replace(/[^\d]/g, '')}`}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 28px', background: brand, color: '#000', fontFamily: 'Barlow Condensed', fontSize: '18px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', textDecoration: 'none' }}
+                >
+                  📞 Call {tenant.phone}
+                </a>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

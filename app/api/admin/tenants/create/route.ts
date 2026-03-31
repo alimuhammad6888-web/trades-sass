@@ -6,6 +6,12 @@ import { createClient } from '@supabase/supabase-js'
 
 const PLANS = ['free', 'pro', 'enterprise']
 
+const STARTER_SERVICES = [
+  { name: 'Service Call',     description: 'On-site visit, diagnosis, and minor repairs.',              duration_mins: 60,  price_cents: 15000, display_order: 1 },
+  { name: 'Standard Repair',  description: 'Common repair work with parts and labor included.',         duration_mins: 120, price_cents: 35000, display_order: 2 },
+  { name: 'Full Inspection',  description: 'Comprehensive safety inspection with written report.',      duration_mins: 90,  price_cents: 25000, display_order: 3 },
+]
+
 const DEFAULT_HOURS: { day: string; is_open: boolean; open_time: string | null; close_time: string | null }[] = [
   { day: 'mon', is_open: true,  open_time: '08:00', close_time: '17:00' },
   { day: 'tue', is_open: true,  open_time: '08:00', close_time: '17:00' },
@@ -114,32 +120,58 @@ export async function POST(req: NextRequest) {
       // Non-fatal — tenant and settings exist, hours can be set later
     }
 
-    // ── 8. Create owner auth user ─────────────────────────────
-    // The handle_new_user() trigger reads raw_user_meta_data and
-    // auto-inserts the users row with role='owner'.
+    // ── 8. Seed starter services (only if none exist yet) ────────
+    const { count: existingCount } = await supabase
+      .from('services')
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', tenantId)
+
+    const { error: servicesErr } = (existingCount ?? 0) === 0
+      ? await supabase
+          .from('services')
+          .insert(STARTER_SERVICES.map(s => ({ tenant_id: tenantId, is_active: true, ...s })))
+      : { error: null }
+
+    if (servicesErr) {
+      console.error('[admin/tenants/create] starter services insert failed:', servicesErr)
+      // Non-fatal — owner can add services manually from dashboard
+    }
+
+    // ── 9. Create owner auth user ─────────────────────────────
     const { data: authData, error: authErr } = await supabase.auth.admin.createUser({
       email: owner_email.trim(),
       password: owner_password,
       email_confirm: true,
-      user_metadata: {
-        tenant_id:  tenantId,
-        role:       'owner',
-        first_name: owner_first_name.trim(),
-        last_name:  owner_last_name.trim(),
-      },
     })
 
     if (authErr || !authData.user) {
       console.error('[admin/tenants/create] auth user creation failed:', authErr)
-      // Tenant + settings exist but no owner — return warning, not failure
       return NextResponse.json({
-        success: true,
-        tenantId,
-        warning: `Tenant created but owner account failed: ${authErr?.message}. Create the owner manually.`,
-      })
+        error: `Owner account creation failed: ${authErr?.message || 'Unknown error'}`,
+      }, { status: 500 })
     }
 
-    // ── 9. Return success ─────────────────────────────────────
+    // ── 10. Create public users row explicitly ────────────────
+    const { error: userErr } = await supabase
+      .from('users')
+      .insert({
+        tenant_id: tenantId,
+        auth_user_id: authData.user.id,
+        role: 'owner',
+        first_name: owner_first_name.trim(),
+        last_name: owner_last_name.trim(),
+        email: owner_email.trim(),
+        is_active: true,
+      })
+
+    if (userErr) {
+      console.error('[admin/tenants/create] public user insert failed:', userErr)
+      return NextResponse.json({
+        error: `Owner profile creation failed: ${userErr.message || 'Unknown error'}`,
+      }, { status: 500 })
+    }
+
+    // ── 11. Return success ────────────────────────────────────
     return NextResponse.json({
       success:  true,
       tenantId,

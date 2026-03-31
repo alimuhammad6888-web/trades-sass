@@ -208,7 +208,30 @@ export default function ServicesPage() {
 
       <div style={{ minHeight:'100vh', background:T.bg, fontFamily:'sans-serif', display:'flex', flexDirection:'column', transition:'background 0.2s' }}>
 
-        {/* Header */}
+        {/* Full-page empty state */}
+        {fetched && services.length === 0 && !showForm && (
+          <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'40px 20px' }}>
+            <div style={{ textAlign:'center', maxWidth:'400px' }}>
+              <div style={{ width:'72px', height:'72px', borderRadius:'50%', background:T.isDark?'#1a1a1a':'#f0ede6', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 20px', fontSize:'32px' }}>🔧</div>
+              <h2 style={{ fontFamily:'Georgia,serif', fontSize:'22px', fontStyle:'italic', color:T.t1, marginBottom:'8px' }}>
+                Add your first service
+              </h2>
+              <p style={{ fontSize:'14px', color:T.t3, lineHeight:1.7, marginBottom:'24px' }}>
+                Your booking page and public site are empty until you add at least one service. Services can be edited or removed at any time.
+              </p>
+              <button onClick={openNew}
+                style={{ padding:'14px 32px', background:T.isDark?'#F4C300':'#1a1917', color:T.isDark?'#000':'#fff', border:'none', borderRadius:'8px', fontSize:'15px', fontWeight:700, cursor:'pointer', fontFamily:'sans-serif' }}>
+                + Add Service
+              </button>
+              <p style={{ fontSize:'12px', color:T.t3, marginTop:'16px' }}>
+                Tip: start with 2–3 of your most common jobs.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Header — shown when services exist or form is open */}
+        {(services.length > 0 || showForm) && (
         <div style={{ padding:'20px 20px 0', flexShrink:0 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'10px', marginBottom:'4px' }}>
             <div>
@@ -226,7 +249,7 @@ export default function ServicesPage() {
           </div>
 
           {/* Capacity bar */}
-          {fetched && (
+          {fetched && services.length > 0 && (
             <div style={{ marginTop:'12px', marginBottom:'4px' }}>
               <div style={{ display:'flex', justifyContent:'space-between', fontSize:'11px', color:T.t3, marginBottom:'4px' }}>
                 <span>Active services</span>
@@ -238,7 +261,9 @@ export default function ServicesPage() {
             </div>
           )}
         </div>
+        )}
 
+        {(services.length > 0 || showForm) && (
         <div className="svc-layout" style={{ marginTop:'16px' }}>
 
           {/* Left: service list */}
@@ -252,8 +277,18 @@ export default function ServicesPage() {
                   </div>
                 ))
               ) : services.length === 0 ? (
-                <div style={{ padding:'40px', textAlign:'center', color:T.t3, fontSize:'13px' }}>
-                  No services yet — add your first one
+                <div style={{ padding:'40px 20px', textAlign:'center' }}>
+                  <div style={{ fontSize:'36px', marginBottom:'12px' }}>🔧</div>
+                  <h3 style={{ fontFamily:'Georgia,serif', fontSize:'16px', fontStyle:'italic', color:T.t1, marginBottom:'8px' }}>
+                    Add your first service
+                  </h3>
+                  <p style={{ fontSize:'13px', color:T.t3, lineHeight:1.6, marginBottom:'16px', maxWidth:'240px', margin:'0 auto 16px' }}>
+                    Your booking page is empty until you add at least one service.
+                  </p>
+                  <button onClick={openNew}
+                    style={{ padding:'10px 22px', background:T.isDark?'#F4C300':'#1a1917', color:T.isDark?'#000':'#fff', border:'none', borderRadius:'6px', fontSize:'13px', fontWeight:700, cursor:'pointer', fontFamily:'sans-serif' }}>
+                    + Add service
+                  </button>
                 </div>
               ) : (
                 <>
@@ -446,6 +481,7 @@ export default function ServicesPage() {
             )}
           </div>
         </div>
+        )}
       </div>
     </>
   )
