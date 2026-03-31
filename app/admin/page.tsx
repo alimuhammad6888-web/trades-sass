@@ -28,21 +28,70 @@ const planBadge: Record<string, { bg: string; color: string }> = {
   enterprise: { bg: '#2e1a1a', color: '#f59e0b' },
 }
 
+function getAdminKey(): string | null {
+  if (typeof window === 'undefined') return null
+  return sessionStorage.getItem('admin_key')
+}
+
+function setAdminKey(key: string) {
+  sessionStorage.setItem('admin_key', key)
+}
+
 export default function AdminPage() {
   const [tenants, setTenants]   = useState<Tenant[]>([])
   const [loading, setLoading]   = useState(true)
+  const [authError, setAuthError] = useState(false)
+  const [keyInput, setKeyInput] = useState('')
 
-  useEffect(() => {
+  function loadTenants(key: string) {
+    setLoading(true)
+    setAuthError(false)
     fetch('/api/admin/tenants/list', {
-      headers: { 'x-admin-key': 'supersecret123' }
+      headers: { 'x-admin-key': key }
     })
-      .then(r => r.json())
+      .then(r => {
+        if (r.status === 401) { setAuthError(true); setLoading(false); sessionStorage.removeItem('admin_key'); return null }
+        return r.json()
+      })
       .then(data => {
+        if (!data) return
         setTenants(data.tenants ?? [])
+        setAdminKey(key)
         setLoading(false)
       })
-      .catch(() => setLoading(false))
+      .catch(() => { setAuthError(true); setLoading(false) })
+  }
+
+  useEffect(() => {
+    const saved = getAdminKey()
+    if (saved) { loadTenants(saved) } else { setAuthError(true); setLoading(false) }
   }, [])
+
+  // ── Auth gate ────────────────────────────────────────────────
+  if (authError && !loading) {
+    return (
+      <div style={{ minHeight: '100vh', background: BG, color: T1, fontFamily: 'sans-serif', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', maxWidth: '360px', padding: '40px 20px' }}>
+          <div style={{ fontSize: '32px', marginBottom: '16px' }}>🔒</div>
+          <h2 style={{ fontFamily: 'Georgia,serif', fontSize: '20px', fontStyle: 'italic', marginBottom: '8px' }}>Admin Portal</h2>
+          <p style={{ fontSize: '13px', color: T3, marginBottom: '20px' }}>Enter admin key to continue</p>
+          <input
+            type="password"
+            value={keyInput}
+            onChange={e => setKeyInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && keyInput.trim()) loadTenants(keyInput.trim()) }}
+            placeholder="Admin key"
+            style={{ width: '100%', padding: '10px 14px', background: '#111', border: `1px solid ${BORDER}`, borderRadius: '6px', color: '#fff', fontSize: '14px', fontFamily: 'sans-serif', boxSizing: 'border-box', outline: 'none', marginBottom: '12px' }}
+          />
+          <button
+            onClick={() => { if (keyInput.trim()) loadTenants(keyInput.trim()) }}
+            style={{ width: '100%', padding: '12px', background: Y, color: '#000', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', fontFamily: 'sans-serif' }}>
+            Unlock
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: BG, color: T1, fontFamily: 'sans-serif' }}>

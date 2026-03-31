@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 
-type Tenant  = { id:string; name:string; slug:string; tagline?:string; primary_color?:string }
+type Tenant  = { id:string; name:string; slug:string; tagline?:string; primary_color?:string; booking_lead_time_hours?:number; booking_window_days?:number }
 type Service = { id:string; name:string; description:string; duration_mins:number; price_cents:number|null }
 type Step    = 'service'|'datetime'|'details'|'confirm'|'done'
 
@@ -20,12 +20,20 @@ function formatDuration(mins:number) {
   return m > 0 ? `${h}h ${m}m` : `${h}h`
 }
 
-function getAvailableDates() {
+function getAvailableDates(leadTimeHours = 2, windowDays = 60) {
   const dates = []
-  const today = new Date()
-  for (let i = 1; dates.length < 14; i++) {
-    const d = new Date(today)
-    d.setDate(today.getDate() + i)
+  const now = new Date()
+  const earliest = new Date(now.getTime() + leadTimeHours * 60 * 60 * 1000)
+  const latest   = new Date(now.getTime() + windowDays * 24 * 60 * 60 * 1000)
+  // Start from tomorrow (or later if lead time pushes past today)
+  const startDay = new Date(Math.max(now.getTime(), earliest.getTime()))
+  startDay.setDate(startDay.getDate() + 1)
+  startDay.setHours(0, 0, 0, 0)
+
+  for (let i = 0; dates.length < 14; i++) {
+    const d = new Date(startDay)
+    d.setDate(startDay.getDate() + i)
+    if (d > latest) break
     if (d.getDay() !== 0) dates.push(d)
   }
   return dates
@@ -228,7 +236,7 @@ export default function BookSlugPage() {
           </div>
           <div style={{ padding:'16px 20px' }}>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:'5px', marginBottom:'20px' }}>
-              {getAvailableDates().map(d => {
+              {getAvailableDates(tenant?.booking_lead_time_hours, tenant?.booking_window_days).map(d => {
                 const label = `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`
                 const isSel = selDate === label
                 return (

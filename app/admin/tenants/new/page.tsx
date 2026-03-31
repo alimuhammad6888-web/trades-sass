@@ -86,11 +86,17 @@ export default function NewTenantPage() {
     setResult(null)
 
     try {
+      const adminKey = typeof window !== 'undefined' ? sessionStorage.getItem('admin_key') : null
+      if (!adminKey) {
+        setResult({ error: 'Admin session expired. Go back to /admin and re-authenticate.' })
+        setSubmitting(false)
+        return
+      }
       const res = await fetch('/api/admin/tenants/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-key': 'supersecret123',
+          'x-admin-key': adminKey,
         },
         body: JSON.stringify(form),
       })

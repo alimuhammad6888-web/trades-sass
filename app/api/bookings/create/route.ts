@@ -58,7 +58,18 @@ export async function POST(req: NextRequest) {
 
     const tenantId = tenant.id
 
-    // ── 5. Verify service belongs to tenant and is active ─────────
+    // ── 5. Load booking rules from business_settings ──────────────
+    const { data: settings } = await supabase
+      .from('business_settings')
+      .select('booking_lead_time_hours, booking_window_days, auto_confirm_bookings')
+      .eq('tenant_id', tenantId)
+      .maybeSingle()
+
+    const leadTimeHours  = settings?.booking_lead_time_hours ?? 2
+    const windowDays     = settings?.booking_window_days ?? 60
+    const autoConfirm    = settings?.auto_confirm_bookings ?? false
+
+    // ── 6. Verify service belongs to tenant and is active ──────────
     const { data: service, error: serviceErr } = await supabase
       .from('services')
       .select('id, name, duration_mins, price_cents, is_active')
@@ -73,7 +84,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'This service is no longer available' }, { status: 400 })
     }
 
-    // ── 6. Build starts_at and ends_at ────────────────────────────
+    // ── 7. Build starts_at and ends_at ────────────────────────────
     const [month, day, year] = date.split('/')
     if (!month || !day || !year) {
       return NextResponse.json({ error: 'Invalid date format' }, { status: 400 })
@@ -85,7 +96,24 @@ export async function POST(req: NextRequest) {
     }
     const ends = new Date(starts.getTime() + service.duration_mins * 60000)
 
-    // ── 7. Check for overlapping bookings ─────────────────────────
+    // ── 8. Enforce lead time ────────────────────────────────────
+    const now = new Date()
+    const minStart = new Date(now.getTime() + leadTimeHours * 60 * 60 * 1000)
+    if (starts < minStart) {
+      return NextResponse.json({
+        error: `Bookings require at least ${leadTimeHours} hours notice. Please choose a later time.`,
+      }, { status: 400 })
+    }
+
+    // ── 9. Enforce booking window ───────────────────────────────
+    const maxStart = new Date(now.getTime() + windowDays * 24 * 60 * 60 * 1000)
+    if (starts > maxStart) {
+      return NextResponse.json({
+        error: `Bookings can only be made up to ${windowDays} days in advance.`,
+      }, { status: 400 })
+    }
+
+    // ── 10. Check for overlapping bookings ────────────────────────
     const { data: conflicts } = await supabase
       .from('bookings')
       .select('id')
@@ -98,7 +126,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'This time slot is no longer available. Please choose another.' }, { status: 409 })
     }
 
-    // ── 8. Normalize phone and upsert customer ────────────────────
+    // ── 11. Normalize phone and upsert customer ───────────────────
     const cleanPhone = normalizePhone(phone)
 
     const { data: existing, error: lookupErr } = await supabase
@@ -142,18 +170,20 @@ export async function POST(req: NextRequest) {
       customerId = newCustomer.id
     }
 
-    // ── 9. Create booking ─────────────────────────────────────────
+    // ── 12. Create booking ────────────────────────────────────────
+    const bookingStatus = autoConfirm ? 'confirmed' : 'pending'
     const { data: booking, error: bookingErr } = await supabase
       .from('bookings')
       .insert({
-        tenant_id:   tenantId,
-        customer_id: customerId,
-        service_id:  service.id,
-        starts_at:   starts.toISOString(),
-        ends_at:     ends.toISOString(),
-        price_cents: service.price_cents,
-        notes:       notes?.trim() || null,
-        status:      'pending',
+        tenant_id:    tenantId,
+        customer_id:  customerId,
+        service_id:   service.id,
+        starts_at:    starts.toISOString(),
+        ends_at:      ends.toISOString(),
+        price_cents:  service.price_cents,
+        notes:        notes?.trim() || null,
+        status:       bookingStatus,
+        ...(autoConfirm ? { confirmed_at: new Date().toISOString() } : {}),
       })
       .select('id')
       .single()
@@ -163,11 +193,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to create booking' }, { status: 500 })
     }
 
-    // ── 10. Return success ────────────────────────────────────────
+    // ── 13. Return success ────────────────────────────────────────
     return NextResponse.json({
-      success:    true,
-      bookingId:  booking.id,
-      bookingRef: booking.id.slice(0, 8).toUpperCase(),
+      success:       true,
+      bookingId:     booking.id,
+      bookingRef:    booking.id.slice(0, 8).toUpperCase(),
+      autoConfirmed: autoConfirm,
     })
 
   } catch (err: any) {

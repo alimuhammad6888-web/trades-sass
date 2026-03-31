@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
 
   const { data: tenant, error: tenantErr } = await supabase
     .from('tenants')
-    .select('id, name, slug, is_active, business_settings ( tagline, primary_color, phone )')
+    .select('id, name, slug, is_active, business_settings ( tagline, primary_color, phone, booking_lead_time_hours, booking_window_days )')
     .eq('slug', slug)
     .single()
 
@@ -49,6 +49,8 @@ export async function GET(req: NextRequest) {
       tagline: settings?.tagline ?? null,
       primary_color: settings?.primary_color ?? null,
       phone: settings?.phone ?? null,
+      booking_lead_time_hours: settings?.booking_lead_time_hours ?? 2,
+      booking_window_days: settings?.booking_window_days ?? 60,
     },
     services: services ?? [],
     siteContent: siteContent ?? null,
