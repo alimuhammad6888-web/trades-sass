@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
 
   const { data: tenant, error: tenantErr } = await supabase
     .from('tenants')
-    .select('id, name, slug, is_active, business_settings ( tagline, primary_color )')
+    .select('id, name, slug, is_active, business_settings ( tagline, primary_color, phone )')
     .eq('slug', slug)
     .single()
 
@@ -35,6 +35,12 @@ export async function GET(req: NextRequest) {
     .eq('is_active', true)
     .order('display_order')
 
+  const { data: siteContent } = await supabase
+    .from('tenant_site_content')
+    .select('hero_headline, hero_subheadline, hero_badge, stats_json, why_us_json, cta_primary_text, cta_secondary_text, cta_description, footer_tagline, is_published')
+    .eq('tenant_id', tenant.id)
+    .maybeSingle()
+
   return NextResponse.json({
     tenant: {
       id: tenant.id,
@@ -42,7 +48,9 @@ export async function GET(req: NextRequest) {
       slug: tenant.slug,
       tagline: settings?.tagline ?? null,
       primary_color: settings?.primary_color ?? null,
+      phone: settings?.phone ?? null,
     },
     services: services ?? [],
+    siteContent: siteContent ?? null,
   })
 }

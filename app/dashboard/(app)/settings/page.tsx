@@ -36,12 +36,55 @@ export default function SettingsPage() {
     notification_email: '', notification_phone: '',
   })
 
+  const [site, setSite] = useState({
+    hero_headline: 'Your trusted local experts',
+    hero_subheadline: 'Licensed, insured, and ready to help.',
+    hero_badge: 'Now accepting online bookings',
+    stats_json: [
+      { value: '500+', label: 'Jobs completed' },
+      { value: '4.9★', label: 'Google rating' },
+      { value: '24hr', label: 'Response time' },
+    ] as { value: string; label: string }[],
+    why_us_json: [
+      { icon: '🛡️', title: 'Licensed & insured', desc: 'Full coverage on every job' },
+      { icon: '⚡', title: 'Same-day availability', desc: 'We work around your schedule' },
+      { icon: '💬', title: 'Upfront pricing', desc: 'No surprises, no hidden fees' },
+    ] as { icon: string; title: string; desc: string }[],
+    cta_primary_text: 'Book a service',
+    cta_secondary_text: 'Ready to get started?',
+    cta_description: '',
+    footer_tagline: 'Proudly serving our local community.',
+    is_published: false,
+  })
+  const [siteExists, setSiteExists] = useState(false)
+
+  function updateSite(key: string, value: any) {
+    setSite(s => ({ ...s, [key]: value }))
+  }
+
+  function updateStat(idx: number, field: 'value' | 'label', val: string) {
+    setSite(s => {
+      const next = [...s.stats_json]
+      next[idx] = { ...next[idx], [field]: val }
+      return { ...s, stats_json: next }
+    })
+  }
+
+  function updateWhyUs(idx: number, field: 'icon' | 'title' | 'desc', val: string) {
+    setSite(s => {
+      const next = [...s.why_us_json]
+      next[idx] = { ...next[idx], [field]: val }
+      return { ...s, why_us_json: next }
+    })
+  }
+
   useEffect(() => {
     if (!tenant?.id) return
     Promise.all([
       supabase.from('tenants').select('name').eq('id', tenant.id).single(),
       supabase.from('business_settings').select('*').eq('tenant_id', tenant.id).single(),
-    ]).then(([tr, sr]) => {
+      supabase.from('tenant_site_content').select('*').eq('tenant_id', tenant.id).single(),
+    ]).then(([tr, sr, siteR]) => {
       if (tr.data) setBizName(tr.data.name)
       if (sr.data) {
         const s = sr.data
@@ -65,6 +108,23 @@ export default function SettingsPage() {
           notification_phone:       s.notification_phone       ?? '',
         }))
       }
+      if (siteR.data) {
+        setSiteExists(true)
+        const sc = siteR.data
+        setSite(s => ({
+          ...s,
+          hero_headline:      sc.hero_headline      ?? s.hero_headline,
+          hero_subheadline:   sc.hero_subheadline   ?? s.hero_subheadline,
+          hero_badge:         sc.hero_badge         ?? s.hero_badge,
+          stats_json:         sc.stats_json         ?? s.stats_json,
+          why_us_json:        sc.why_us_json        ?? s.why_us_json,
+          cta_primary_text:   sc.cta_primary_text   ?? s.cta_primary_text,
+          cta_secondary_text: sc.cta_secondary_text ?? s.cta_secondary_text,
+          cta_description:    sc.cta_description    ?? s.cta_description,
+          footer_tagline:     sc.footer_tagline     ?? s.footer_tagline,
+          is_published:       sc.is_published       ?? false,
+        }))
+      }
       setFetched(true)
     })
   }, [tenant?.id])
@@ -75,10 +135,29 @@ export default function SettingsPage() {
 
   async function save() {
     setSaving(true)
+    const sitePayload = {
+      tenant_id: tenant!.id,
+      hero_headline: site.hero_headline,
+      hero_subheadline: site.hero_subheadline,
+      hero_badge: site.hero_badge,
+      stats_json: site.stats_json,
+      why_us_json: site.why_us_json,
+      cta_primary_text: site.cta_primary_text,
+      cta_secondary_text: site.cta_secondary_text,
+      cta_description: site.cta_description,
+      footer_tagline: site.footer_tagline,
+      is_published: site.is_published,
+    }
+
     await Promise.all([
       supabase.from('tenants').update({ name: bizName }).eq('id', tenant!.id),
       supabase.from('business_settings').update(form).eq('tenant_id', tenant!.id),
+      siteExists
+        ? supabase.from('tenant_site_content').update(sitePayload).eq('tenant_id', tenant!.id)
+        : supabase.from('tenant_site_content').insert(sitePayload),
     ])
+
+    setSiteExists(true)
     setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2500)
   }
 
@@ -92,7 +171,7 @@ export default function SettingsPage() {
   const pr = ({ sharp:'0px', soft:'6px', round:'14px' } as any)[form.border_radius] ?? '6px'
   const pf = ({ sans:"'DM Sans',sans-serif", serif:'Georgia,serif', slab:'Rockwell,serif' } as any)[form.font_style] ?? 'sans-serif'
 
-  const TABS = ['branding', 'contact', 'notifications', 'booking']
+  const TABS = ['branding', 'contact', 'notifications', 'booking', 'website']
 
   return (
     <div style={{ minHeight:'100vh', background:T.bg, fontFamily:'sans-serif', transition:'background 0.2s' }}>
@@ -102,7 +181,7 @@ export default function SettingsPage() {
       <div style={{ padding:'20px 20px 0', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'10px' }}>
         <div>
           <h1 style={{ fontFamily:'Georgia,serif', fontSize:'22px', fontStyle:'italic', color:T.t1, marginBottom:'4px' }}>Settings</h1>
-          <p style={{ fontSize:'13px', color:T.t3 }}>Branding, contact info, notifications, and booking rules</p>
+          <p style={{ fontSize:'13px', color:T.t3 }}>Branding, contact info, notifications, booking rules, and website content</p>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
           {saved && <span style={{ fontSize:'13px', color:'#1a6b4a' }}>✓ Saved</span>}
@@ -314,6 +393,118 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* ── WEBSITE ── */}
+            {tab === 'website' && (
+              <>
+                {/* Publish toggle */}
+                <div style={{ ...card, border:`1px solid ${site.is_published?(T.isDark?'#1a3a2a':'#c3e6cb'):T.border}`, background:site.is_published?(T.isDark?'#0a1a12':'#f0faf4'):T.card }}>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                    <div>
+                      <div style={{ fontSize:'14px', fontWeight:600, color:T.t1 }}>
+                        {site.is_published ? '🟢 Website is live' : '⚪ Website is unpublished'}
+                      </div>
+                      <div style={{ fontSize:'12px', color:T.t3, marginTop:'4px' }}>
+                        {site.is_published ? 'Customers can see your site content' : 'Only the booking page is visible to customers'}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => updateSite('is_published', !site.is_published)}
+                      style={{ padding:'6px 16px', borderRadius:'20px', border:'none', cursor:'pointer', fontSize:'12px', fontWeight:600, fontFamily:'sans-serif', background:site.is_published?'#1a6b4a':(T.isDark?'#333':'#ddd'), color:site.is_published?'#fff':T.t2 }}>
+                      {site.is_published ? 'Published' : 'Publish'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Hero section */}
+                <div style={card}>
+                  <div style={cardTitle}>Hero section</div>
+                  <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
+                    <div>
+                      <label style={lbl}>Badge text</label>
+                      <input style={inp} value={site.hero_badge} onChange={e => updateSite('hero_badge', e.target.value)} placeholder="Now accepting online bookings" />
+                      <div style={hint}>Small pill shown above the headline</div>
+                    </div>
+                    <div>
+                      <label style={lbl}>Headline</label>
+                      <input style={inp} value={site.hero_headline} onChange={e => updateSite('hero_headline', e.target.value)} placeholder="Your trusted local experts" />
+                    </div>
+                    <div>
+                      <label style={lbl}>Subheadline</label>
+                      <input style={inp} value={site.hero_subheadline} onChange={e => updateSite('hero_subheadline', e.target.value)} placeholder="Licensed, insured, and ready to help." />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stats */}
+                <div style={card}>
+                  <div style={cardTitle}>Stats bar</div>
+                  <p style={{ fontSize:'12px', color:T.t3, marginBottom:'14px' }}>Three key numbers shown below the hero.</p>
+                  <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
+                    {site.stats_json.map((stat, i) => (
+                      <div key={i} style={{ display:'grid', gridTemplateColumns:'100px 1fr', gap:'8px', alignItems:'center' }}>
+                        <input style={{ ...inp, textAlign:'center' as any, fontWeight:700 }} value={stat.value} onChange={e => updateStat(i, 'value', e.target.value)} placeholder="500+" />
+                        <input style={inp} value={stat.label} onChange={e => updateStat(i, 'label', e.target.value)} placeholder="Jobs completed" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Why us */}
+                <div style={card}>
+                  <div style={cardTitle}>Why choose us</div>
+                  <p style={{ fontSize:'12px', color:T.t3, marginBottom:'14px' }}>Three selling points shown on the homepage.</p>
+                  <div style={{ display:'flex', flexDirection:'column', gap:'14px' }}>
+                    {site.why_us_json.map((item, i) => (
+                      <div key={i} style={{ padding:'12px', border:`1px solid ${T.border}`, borderRadius:'6px', background:T.isDark?'#111':'#fafaf9' }}>
+                        <div style={{ display:'grid', gridTemplateColumns:'50px 1fr', gap:'8px', marginBottom:'8px' }}>
+                          <div>
+                            <label style={lbl}>Icon</label>
+                            <input style={{ ...inp, textAlign:'center' as any, fontSize:'18px', padding:'6px' }} value={item.icon} onChange={e => updateWhyUs(i, 'icon', e.target.value)} />
+                          </div>
+                          <div>
+                            <label style={lbl}>Title</label>
+                            <input style={inp} value={item.title} onChange={e => updateWhyUs(i, 'title', e.target.value)} />
+                          </div>
+                        </div>
+                        <div>
+                          <label style={lbl}>Description</label>
+                          <input style={inp} value={item.desc} onChange={e => updateWhyUs(i, 'desc', e.target.value)} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* CTAs & footer */}
+                <div style={card}>
+                  <div style={cardTitle}>Buttons & footer</div>
+                  <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
+                      <div>
+                        <label style={lbl}>Primary CTA text</label>
+                        <input style={inp} value={site.cta_primary_text} onChange={e => updateSite('cta_primary_text', e.target.value)} placeholder="Book a service" />
+                        <div style={hint}>Main button in hero and CTA banner</div>
+                      </div>
+                      <div>
+                        <label style={lbl}>CTA banner headline</label>
+                        <input style={inp} value={site.cta_secondary_text} onChange={e => updateSite('cta_secondary_text', e.target.value)} placeholder="Ready to get started?" />
+                        <div style={hint}>Large text in the bottom CTA section</div>
+                      </div>
+                    </div>
+                    <div>
+                      <label style={lbl}>CTA banner description</label>
+                      <input style={inp} value={site.cta_description} onChange={e => updateSite('cta_description', e.target.value)} placeholder="Book online in 60 seconds or call us directly." />
+                      <div style={hint}>Shown below the CTA headline</div>
+                    </div>
+                    <div>
+                      <label style={lbl}>Footer tagline</label>
+                      <input style={inp} value={site.footer_tagline} onChange={e => updateSite('footer_tagline', e.target.value)} placeholder="Proudly serving our local community." />
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
           </div>
 
