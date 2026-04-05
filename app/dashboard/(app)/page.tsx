@@ -54,9 +54,8 @@ export default function OverviewPage() {
   ]
 
   return (
-    <div style={{ minHeight:'100vh', background:T.bg, fontFamily:"'DM Sans',sans-serif", transition:'background 0.2s' }}>
+    <div style={{ minHeight:'100vh', background:T.bg, transition:'background 0.2s' }}>
       <style suppressHydrationWarning>{`
-        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap');
         @keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:0.7} }
         .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px; }
         .main-grid { display:grid; grid-template-columns:1fr 260px; gap:20px; align-items:start; }

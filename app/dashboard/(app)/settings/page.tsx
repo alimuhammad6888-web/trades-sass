@@ -19,6 +19,78 @@ const PALETTES = [
   { label:'Midnight', p:'#1e1b4b', a:'#818cf8' },
 ]
 
+function WebsitePreview({ site, pp, pa, bizName }: { site: any; pp: string; pa: string; bizName: string }) {
+  return (
+    <div style={{ position:'sticky', top:'20px' }}>
+      <div style={{ fontSize:'10px', fontWeight:500, textTransform:'uppercase' as any, letterSpacing:'0.07em', color:'#888', marginBottom:'10px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <span>Website preview</span>
+        <span style={{ padding:'2px 8px', borderRadius:'20px', fontSize:'10px', fontWeight:600, background:site.is_published?'#e8f5ee':'#f0f0f0', color:site.is_published?'#1a6b4a':'#888' }}>
+          {site.is_published ? '🟢 Live' : '⚪ Draft'}
+        </span>
+      </div>
+      <div style={{ border:'1px solid #1a1a1a', borderRadius:'8px', overflow:'hidden', background:'#0a0a0a' }}>
+        {/* Nav */}
+        <div style={{ background:'rgba(10,10,10,0.95)', padding:'8px 12px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid #1a1a1a' }}>
+          <span style={{ color:'#fff', fontWeight:900, fontSize:'10px', textTransform:'uppercase' as any, letterSpacing:'0.05em' }}>{bizName||'Your Business'}</span>
+          <span style={{ background:pp, color:'#000', padding:'3px 8px', fontSize:'9px', fontWeight:700, textTransform:'uppercase' as any, letterSpacing:'0.08em' }}>Book now</span>
+        </div>
+        {/* Hero */}
+        <div style={{ background:'#0a0a0a', padding:'16px 12px', borderBottom:'1px solid #111' }}>
+          <div style={{ fontSize:'9px', color:pa, fontWeight:600, textTransform:'uppercase' as any, letterSpacing:'0.15em', marginBottom:'6px' }}>
+            {site.hero_badge || 'Now accepting online bookings'}
+          </div>
+          <div style={{ fontSize:'18px', fontWeight:900, color:'#fff', textTransform:'uppercase' as any, lineHeight:0.9, letterSpacing:'-0.01em', marginBottom:'6px' }}>
+            {(site.hero_headline || 'Your Business').slice(0, 22)}
+          </div>
+          <div style={{ fontSize:'9px', color:'#555', textTransform:'uppercase' as any, letterSpacing:'0.04em', marginBottom:'10px' }}>
+            {(site.hero_subheadline || '').slice(0, 44)}
+          </div>
+          <div style={{ display:'inline-flex', alignItems:'center', gap:'4px', padding:'5px 10px', background:pp, color:'#000', fontSize:'9px', fontWeight:700, textTransform:'uppercase' as any, letterSpacing:'0.08em' }}>
+            ⚡ {(site.cta_primary_text || 'Book a service').slice(0, 20)}
+          </div>
+        </div>
+        {/* Stats bar */}
+        <div style={{ background:pp, padding:'8px 12px', display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'4px', textAlign:'center' }}>
+          {(site.stats_json || []).slice(0, 3).map((s: any, i: number) => (
+            <div key={i}>
+              <div style={{ fontSize:'11px', fontWeight:900, color:'#000', lineHeight:1 }}>{s.value || s.num}</div>
+              <div style={{ fontSize:'7px', color:'#333', textTransform:'uppercase' as any, letterSpacing:'0.06em' }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+        {/* Why us */}
+        {(site.why_us_json || []).length > 0 && (
+          <div style={{ padding:'10px 12px', borderTop:'1px solid #111', display:'flex', flexDirection:'column', gap:'8px' }}>
+            {(site.why_us_json || []).slice(0, 3).map((w: any, i: number) => (
+              <div key={i} style={{ display:'flex', gap:'6px', alignItems:'flex-start' }}>
+                <span style={{ fontSize:'12px', fontWeight:900, color:pa, opacity:0.9, flexShrink:0 }}>{String(i+1).padStart(2,'0')}</span>
+                <div>
+                  <div style={{ fontSize:'9px', fontWeight:700, color:'#fff', textTransform:'uppercase' as any }}>{w.title}</div>
+                  <div style={{ fontSize:'8px', color:'#555', lineHeight:1.4, marginTop:'1px' }}>{(w.desc||'').slice(0, 44)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {/* CTA banner */}
+        <div style={{ background:pp, padding:'10px 12px', textAlign:'center' }}>
+          <div style={{ fontSize:'13px', fontWeight:900, color:'#000', textTransform:'uppercase' as any, lineHeight:0.9, marginBottom:'4px' }}>
+            {(site.cta_secondary_text || 'Ready to get started?').slice(0, 24)}
+          </div>
+          {site.cta_description && (
+            <div style={{ fontSize:'8px', color:'#333', marginBottom:'4px' }}>{site.cta_description.slice(0, 54)}</div>
+          )}
+        </div>
+        {/* Footer */}
+        <div style={{ background:'#050505', padding:'8px 12px', display:'flex', alignItems:'center', justifyContent:'space-between', borderTop:'1px solid #111' }}>
+          <div style={{ fontSize:'9px', fontWeight:900, color:'#fff', textTransform:'uppercase' as any }}>{bizName||'Your Business'}</div>
+          <div style={{ fontSize:'8px', color:'#333' }}>{(site.footer_tagline||'').slice(0, 24)}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   const { tenant } = useTenant()
   const T = useThemeTokens()
@@ -80,11 +152,13 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!tenant?.id) return
+    let mounted = true
     Promise.all([
       supabase.from('tenants').select('name').eq('id', tenant.id).single(),
       supabase.from('business_settings').select('*').eq('tenant_id', tenant.id).single(),
-      supabase.from('tenant_site_content').select('*').eq('tenant_id', tenant.id).single(),
+      supabase.from('tenant_site_content').select('*').eq('tenant_id', tenant.id).maybeSingle(),
     ]).then(([tr, sr, siteR]) => {
+      if (!mounted) return
       if (tr.data) setBizName(tr.data.name)
       if (sr.data) {
         const s = sr.data
@@ -127,6 +201,7 @@ export default function SettingsPage() {
       }
       setFetched(true)
     })
+    return () => { mounted = false }
   }, [tenant?.id])
 
   function update(key: string, value: any) {
@@ -149,14 +224,16 @@ export default function SettingsPage() {
       is_published: site.is_published,
     }
 
-    await Promise.all([
+    const [r1, r2, r3] = await Promise.all([
       supabase.from('tenants').update({ name: bizName }).eq('id', tenant!.id),
       supabase.from('business_settings').update(form).eq('tenant_id', tenant!.id),
       siteExists
         ? supabase.from('tenant_site_content').update(sitePayload).eq('tenant_id', tenant!.id)
         : supabase.from('tenant_site_content').insert(sitePayload),
     ])
-
+    if (r1.error) { console.error('[save tenants]', r1.error.message); setSaving(false); return }
+    if (r2.error) { console.error('[save business_settings]', r2.error.message); setSaving(false); return }
+    if (r3.error) { console.error('[save site_content]', r3.error.message); setSaving(false); return }
     setSiteExists(true)
     setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2500)
   }
@@ -168,6 +245,7 @@ export default function SettingsPage() {
   const hint: any = { fontSize:'11px', color:T.t3, marginTop:'5px', lineHeight:1.5 }
 
   const pp = form.primary_color
+  const pa = form.accent_color
   const pr = ({ sharp:'0px', soft:'6px', round:'14px' } as any)[form.border_radius] ?? '6px'
   const pf = ({ sans:"'DM Sans',sans-serif", serif:'Georgia,serif', slab:'Rockwell,serif' } as any)[form.font_style] ?? 'sans-serif'
 
@@ -508,7 +586,7 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* Live preview — branding tab only, hidden on mobile */}
+          {/* Live preview — hidden on mobile */}
           <div className="preview-panel">
             {tab === 'branding' && (
               <div style={{ position:'sticky', top:'20px' }}>
@@ -530,11 +608,14 @@ export default function SettingsPage() {
                       <div style={{ position:'absolute', top:0, left:0, right:0, height:'2px', background:pp }} />
                       <div style={{ fontSize:'12px', fontWeight:700, color:'#fff', textTransform:'uppercase' as any, marginBottom:'4px', fontFamily:pf }}>Panel Upgrade</div>
                       <div style={{ fontSize:'10px', color:'#666', marginBottom:'8px' }}>200A service, permitted and inspected.</div>
-                      <div style={{ fontSize:'11px', color:pp, fontWeight:600 }}>$1,500 · Full day</div>
+                      <div style={{ fontSize:'11px', color:pa, fontWeight:600 }}>$1,500 · Full day</div>
                     </div>
                   </div>
                 </div>
               </div>
+            )}
+            {tab === 'website' && (
+              <WebsitePreview site={site} pp={pp} pa={pa} bizName={bizName} />
             )}
           </div>
         </div>

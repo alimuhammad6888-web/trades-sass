@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
 import { TenantProvider } from '@/lib/tenant-context'
 import { type Tenant, DEFAULT_FEATURES } from '@/lib/tenant'
@@ -55,8 +56,11 @@ export default function DashboardAppLayout({ children }: { children: React.React
   }, [])
 
   useEffect(() => {
+    let mounted = true
+
     async function init() {
       const { data: { user } } = await supabase.auth.getUser()
+      if (!mounted) return
       if (!user) { router.push('/dashboard/login'); return }
 
       const { data: userRow } = await supabase
@@ -65,6 +69,7 @@ export default function DashboardAppLayout({ children }: { children: React.React
         .eq('auth_user_id', user.id)
         .single()
 
+      if (!mounted) return
       if (!userRow?.tenant_id) { router.push('/dashboard/login'); return }
 
       const { data: tenantData } = await supabase
@@ -73,6 +78,7 @@ export default function DashboardAppLayout({ children }: { children: React.React
         .eq('id', userRow.tenant_id)
         .single()
 
+      if (!mounted) return
       if (!tenantData) { router.push('/dashboard/login'); return }
 
       const settings = Array.isArray(tenantData.business_settings)
@@ -98,8 +104,13 @@ export default function DashboardAppLayout({ children }: { children: React.React
 
       setLoading(false)
     }
+
     init()
-  }, [])
+
+    return () => {
+      mounted = false
+    }
+  }, [router])
 
   function toggleCollapse() {
     const next = !collapsed
@@ -180,7 +191,7 @@ export default function DashboardAppLayout({ children }: { children: React.React
             )
 
             return (
-              <a key={item.label} href={item.href}
+              <Link key={item.label} href={item.href}
                 onClick={() => setMobileOpen(false)}
                 title={!labels ? item.label : undefined}
                 style={{ display:'flex', alignItems:'center', gap:'10px', padding:labels?'10px 12px':'10px 0', justifyContent:labels?'flex-start':'center', background:active?S.activeBg:'transparent', borderRadius:'8px', textDecoration:'none', marginBottom:'2px', transition:'background 0.15s', borderLeft:active?'3px solid #F4C300':'3px solid transparent' }}
@@ -192,7 +203,7 @@ export default function DashboardAppLayout({ children }: { children: React.React
                     {item.label}
                   </span>
                 )}
-              </a>
+              </Link>
             )
           })}
         </nav>
@@ -200,13 +211,13 @@ export default function DashboardAppLayout({ children }: { children: React.React
         {/* Bottom */}
         <div style={{ padding:'10px 8px', borderTop:`1px solid ${S.border}` }}>
           {labels && (
-            <a href="/" target="_blank"
+            <Link href="/" target="_blank"
               style={{ display:'flex', alignItems:'center', gap:'10px', padding:'9px 12px', borderRadius:'8px', textDecoration:'none', marginBottom:'2px', transition:'background 0.15s' }}
               onMouseEnter={e => e.currentTarget.style.background=S.hoverBg}
               onMouseLeave={e => e.currentTarget.style.background='transparent'}>
               <span style={{ fontSize:'18px', lineHeight:1 }}>🌐</span>
               <span style={{ fontSize:'13px', color:S.subtext, fontWeight:500, transition:'color 0.2s' }}>View site</span>
-            </a>
+            </Link>
           )}
           <button onClick={signOut}
             title={!labels?'Sign out':undefined}
