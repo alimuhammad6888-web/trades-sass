@@ -3,6 +3,7 @@
 // Schema matched exactly to app/api/public/tenant-by-slug/route.ts
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
+
 import { notFound } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import BookingFlow from './BookingFlow'
@@ -28,7 +29,7 @@ export default async function BookSlugPage({ params }: { params: { slug: string 
   // Query 2: fetch business_settings explicitly using tenant_id
   const { data: settings } = await supabase
     .from('business_settings')
-    .select('tagline, primary_color, accent_color, phone, booking_lead_time_hours, booking_window_days')
+    .select('tagline, primary_color, accent_color, phone, booking_lead_time_hours, booking_window_days, features')
     .eq('tenant_id', tenant.id)
     .single()
 
@@ -37,19 +38,20 @@ export default async function BookSlugPage({ params }: { params: { slug: string 
     .select('id, name, description, duration_mins, price_cents')
     .eq('tenant_id', tenant.id)
     .eq('is_active', true)
-    .order('display_order')             // display_order, not sort_order
+    .order('display_order') // display_order, not sort_order
 
   // Flatten into the shape BookingFlow expects (matches API route output)
   const tenantForClient = {
-    id:                    tenant.id,
-    name:                  tenant.name,
-    slug:                  tenant.slug,
-    tagline:               settings?.tagline               ?? null,
-    primary_color:         settings?.primary_color         ?? null,
-    accent_color:          settings?.accent_color          ?? null,
-    phone:                 settings?.phone                 ?? null,
+    id: tenant.id,
+    name: tenant.name,
+    slug: tenant.slug,
+    tagline: settings?.tagline ?? null,
+    primary_color: settings?.primary_color ?? null,
+    accent_color: settings?.accent_color ?? null,
+    phone: settings?.phone ?? null,
     booking_lead_time_hours: settings?.booking_lead_time_hours ?? 2,
-    booking_window_days:   settings?.booking_window_days   ?? 60,
+    booking_window_days: settings?.booking_window_days ?? 60,
+    features: settings?.features ?? {},
   }
 
   return (

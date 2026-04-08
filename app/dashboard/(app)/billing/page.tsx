@@ -4,12 +4,15 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { useTenant } from '@/lib/tenant-context'
 import { useThemeTokens } from '@/lib/theme'
+import { hasFeature, resolvePlanName } from '@/lib/features'
 import Link from 'next/link'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
+
+type Plan = 'starter' | 'pro' | 'enterprise'
 
 type BillingRow = {
   status:                 string
@@ -22,11 +25,43 @@ type BillingRow = {
   cancel_at_period_end:   boolean
 }
 
+const PLAN_OPTIONS: { plan: Plan; label: string; description: string; price: string }[] = [
+  {
+    plan:        'starter',
+    label:       'Starter',
+    description: 'Website, booking, and email confirmations.',
+    price:       'Free',
+  },
+  {
+    plan:        'pro',
+    label:       'Pro',
+    description: 'Everything in Starter plus payments, SMS, and custom domain.',
+    price:       '$49/mo',
+  },
+  {
+    plan:        'enterprise',
+    label:       'Enterprise',
+    description: 'Everything in Pro plus AI chatbot, staff management, and advanced CRM.',
+    price:       '$99/mo',
+  },
+]
+
 function formatDate(iso: string | null): string {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('en-US', {
     year: 'numeric', month: 'long', day: 'numeric',
   })
+}
+
+function formatPlanLabel(plan: string | null | undefined): string {
+  const canonical = resolvePlanName(plan)
+  if (!canonical) return 'No plan'
+  const labels: Record<string, string> = {
+    starter:    'Starter Plan',
+    pro:        'Pro Plan',
+    enterprise: 'Enterprise Plan',
+  }
+  return labels[canonical] ?? 'No plan'
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -60,10 +95,10 @@ function SkeletonLine({ width = '100%', height = '16px' }: { width?: string; hei
   return (
     <div style={{
       width, height,
-      borderRadius: '4px',
-      background: 'linear-gradient(90deg, #1e1e1e 25%, #2a2a2a 50%, #1e1e1e 75%)',
+      borderRadius:   '4px',
+      background:     'linear-gradient(90deg, #1e1e1e 25%, #2a2a2a 50%, #1e1e1e 75%)',
       backgroundSize: '200% 100%',
-      animation: 'shimmer 1.5s infinite',
+      animation:      'shimmer 1.5s infinite',
     }} />
   )
 }
@@ -72,13 +107,13 @@ export default function BillingPage() {
   const { tenant } = useTenant()
   const T = useThemeTokens()
 
-  const [billing, setBilling]   = useState<BillingRow | null>(null)
-  const [loading, setLoading]   = useState(true)
-  const [checking, setChecking] = useState(false)
-  const [error, setError]       = useState<string | null>(null)
+  const [billing, setBilling]         = useState<BillingRow | null>(null)
+  const [loading, setLoading]         = useState(true)
+  const [checkingPlan, setCheckingPlan] = useState<Plan | null>(null)
+  const [openingPortal, setOpeningPortal] = useState(false)
+  const [error, setError]             = useState<string | null>(null)
   const [checkoutResult, setCheckoutResult] = useState<string | null>(null)
 
-  // Read URL param client-side only to avoid hydration mismatch
   useEffect(() => {
     const param = new URLSearchParams(window.location.search).get('checkout')
     setCheckoutResult(param)
@@ -98,42 +133,72 @@ export default function BillingPage() {
       })
   }, [tenant?.id])
 
-  async function startCheckout() {
+  async function startCheckout(plan: Plan) {
     if (!tenant?.id) return
-    setChecking(true)
+    setCheckingPlan(plan)
     setError(null)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.access_token) {
         setError('Session expired — please log in again.')
-        setChecking(false)
+        setCheckingPlan(null)
         return
       }
       const res = await fetch('/api/billing/checkout', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body:    JSON.stringify({ tenant_id: tenant.id, plan }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.url) {
+        setError(data.error ?? 'Failed to start checkout.')
+        setCheckingPlan(null)
+        return
+      }
+      window.location.href = data.url
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unexpected error')
+      setCheckingPlan(null)
+    }
+  }
+
+  async function openBillingPortal() {
+    if (!tenant?.id) return
+    setOpeningPortal(true)
+    setError(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        setError('Session expired — please log in again.')
+        setOpeningPortal(false)
+        return
+      }
+      const res = await fetch('/api/billing/portal', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body:    JSON.stringify({ tenant_id: tenant.id }),
       })
       const data = await res.json()
       if (!res.ok || !data.url) {
-        setError(data.error ?? 'Failed to start checkout.')
-        setChecking(false)
+        setError(data.error ?? 'Failed to open billing portal.')
+        setOpeningPortal(false)
         return
       }
       window.location.href = data.url
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unexpected error')
-      setChecking(false)
+      setOpeningPortal(false)
     }
   }
 
-  const isActive    = billing?.billing_enabled && billing?.status === 'active'
-  const renewLabel  = billing?.cancel_at_period_end ? 'Cancels on' : 'Renews on'
-  const dateToShow  = billing?.status === 'trial'
-  ? billing?.trial_ends_at
-  : billing?.current_period_end
-    ? billing.trial_ends_at
+  const isActive   = billing?.billing_enabled && billing?.status === 'active'
+  const renewLabel = billing?.cancel_at_period_end ? 'Cancels on' : 'Renews on'
+  const dateToShow = billing?.status === 'trial'
+    ? billing?.trial_ends_at
     : billing?.current_period_end
+
+  const paymentsEnabled = hasFeature(tenant, 'payments')
+  const planLabel       = formatPlanLabel(tenant?.plan)
 
   return (
     <div style={{ minHeight: '100vh', background: T.bg, fontFamily: 'sans-serif', transition: 'background 0.2s' }}>
@@ -176,16 +241,13 @@ export default function BillingPage() {
           </div>
         )}
 
-        {/* Plan card */}
+        {/* ── Platform subscription card ────────────────────── */}
         <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: '10px', overflow: 'hidden', marginBottom: '12px' }}>
-
-          {/* Card header */}
           <div style={{ padding: '16px 20px', borderBottom: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: '13px', fontWeight: 600, color: T.t1 }}>Current plan</span>
             {loading ? <SkeletonLine width="60px" height="22px" /> : billing ? <StatusBadge status={billing.status} /> : null}
           </div>
 
-          {/* Card body */}
           <div style={{ padding: '20px' }}>
             {loading ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -199,17 +261,14 @@ export default function BillingPage() {
                   No plan
                 </div>
                 <div style={{ fontSize: '13px', color: T.t3 }}>
-                  Subscribe to unlock all dashboard features.
+                  Choose a plan below to get started.
                 </div>
               </div>
             ) : (
               <>
-                {/* Plan name */}
                 <div style={{ fontSize: '26px', fontWeight: 800, color: T.t1, marginBottom: '16px', fontFamily: 'Barlow Condensed, sans-serif', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                  Pro Plan
+                  {planLabel}
                 </div>
-
-                {/* Divider rows */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
                   {[
                     { label: renewLabel, val: formatDate(dateToShow) },
@@ -221,7 +280,6 @@ export default function BillingPage() {
                     </div>
                   ))}
                 </div>
-
                 {billing.cancel_at_period_end && (
                   <div style={{ marginTop: '14px', background: '#2a1f00', border: '1px solid #5c4400', borderRadius: '6px', padding: '10px 14px', fontSize: '12px', color: '#F4C300', lineHeight: 1.5 }}>
                     Your subscription is set to cancel at the end of the billing period.
@@ -232,50 +290,181 @@ export default function BillingPage() {
           </div>
         </div>
 
-        {/* Action card */}
-        <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: '10px', padding: '20px', marginBottom: '24px' }}>
-          {loading ? (
+        {/* ── Action area: manage (active) or plan chooser (inactive) ── */}
+        {loading ? (
+          <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: '10px', padding: '20px', marginBottom: '24px' }}>
             <SkeletonLine width="140px" height="36px" />
-          ) : isActive ? (
-            <div>
-              <div style={{ fontSize: '13px', color: T.t3, marginBottom: '14px', lineHeight: 1.6 }}>
-                To update payment details, cancel, or change your plan — contact support. A self-serve portal is coming soon.
-              </div>
-              <button
-                disabled
-                style={{ padding: '10px 20px', fontSize: '13px', fontWeight: 600, fontFamily: 'sans-serif', borderRadius: '6px', border: `1px solid ${T.border}`, background: 'transparent', color: T.t3, cursor: 'not-allowed', opacity: 0.5 }}
-              >
-                Manage billing (coming soon)
-              </button>
+          </div>
+        ) : isActive ? (
+          /* Active: Stripe Customer Portal */
+          <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: '10px', padding: '20px', marginBottom: '24px' }}>
+            <div style={{ fontSize: '13px', color: T.t3, marginBottom: '14px', lineHeight: 1.6 }}>
+              Update your payment method, download invoices, or cancel your subscription from the billing portal.
             </div>
-          ) : (
-            <div>
-              <div style={{ fontSize: '13px', color: T.t3, marginBottom: '14px', lineHeight: 1.6 }}>
-                Start your subscription to unlock all features.
+            <button
+              onClick={openBillingPortal}
+              disabled={openingPortal || !tenant?.id}
+              style={{
+                padding:       '10px 20px',
+                fontSize:      '13px',
+                fontWeight:    600,
+                fontFamily:    'sans-serif',
+                borderRadius:  '6px',
+                border:        'none',
+                background:    openingPortal ? T.border : (T.isDark ? '#F4C300' : '#1a1917'),
+                color:         T.isDark ? '#000' : '#fff',
+                cursor:        openingPortal || !tenant?.id ? 'not-allowed' : 'pointer',
+                opacity:       openingPortal || !tenant?.id ? 0.6 : 1,
+                transition:    'opacity 0.15s, background 0.15s',
+                letterSpacing: '0.02em',
+              }}
+            >
+              {openingPortal ? 'Opening portal…' : 'Manage plan & billing'}
+            </button>
+          </div>
+        ) : (
+          /* Not active: plan chooser */
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: T.t3, marginBottom: '12px' }}>
+              Choose a plan
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {PLAN_OPTIONS.map(({ plan, label, description, price }) => {
+                const isChecking  = checkingPlan === plan
+                const anyChecking = checkingPlan !== null
+                return (
+                  <div
+                    key={plan}
+                    style={{
+                      background:     T.card,
+                      border:         `1px solid ${T.border}`,
+                      borderRadius:   '10px',
+                      padding:        '16px 20px',
+                      display:        'flex',
+                      alignItems:     'center',
+                      justifyContent: 'space-between',
+                      gap:            '16px',
+                      opacity:        anyChecking && !isChecking ? 0.5 : 1,
+                      transition:     'opacity 0.15s',
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '14px', fontWeight: 700, color: T.t1, fontFamily: 'Barlow Condensed, sans-serif', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          {label}
+                        </span>
+                        <span style={{ fontSize: '12px', fontWeight: 600, color: T.t3 }}>
+                          {price}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: T.t3, lineHeight: 1.5 }}>
+                        {description}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => startCheckout(plan)}
+                      disabled={anyChecking || !tenant?.id}
+                      style={{
+                        flexShrink:    0,
+                        padding:       '8px 18px',
+                        fontSize:      '12px',
+                        fontWeight:    700,
+                        fontFamily:    'sans-serif',
+                        borderRadius:  '6px',
+                        border:        'none',
+                        background:    isChecking ? T.border : (T.isDark ? '#F4C300' : '#1a1917'),
+                        color:         T.isDark ? '#000' : '#fff',
+                        cursor:        anyChecking || !tenant?.id ? 'not-allowed' : 'pointer',
+                        opacity:       !tenant?.id ? 0.5 : 1,
+                        transition:    'opacity 0.15s, background 0.15s',
+                        letterSpacing: '0.02em',
+                        whiteSpace:    'nowrap',
+                      }}
+                    >
+                      {isChecking ? 'Redirecting…' : `Get ${label}`}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── Section divider ───────────────────────────────── */}
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: T.t3 }}>
+            Customer Payments
+          </div>
+        </div>
+
+        {/* ── Customer payments card ────────────────────────── */}
+        {paymentsEnabled ? (
+          <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: '10px', overflow: 'hidden', marginBottom: '24px' }}>
+            <div style={{ padding: '16px 20px', borderBottom: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: T.t1 }}>Customer Payments</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 600, background: '#0d2b1e', color: '#34d399' }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#34d399', display: 'inline-block' }} />
+                Enabled
+              </span>
+            </div>
+            <div style={{ padding: '20px' }}>
+              <div style={{ fontSize: '13px', color: T.t3, lineHeight: 1.6 }}>
+                Payments setup coming soon.
               </div>
+            </div>
+          </div>
+        ) : (
+          <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: '10px', overflow: 'hidden', marginBottom: '24px', position: 'relative' }}>
+            <div style={{ position: 'absolute', top: '16px', right: '20px' }}>
+              <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', background: '#2a1f00', color: '#F4C300' }}>
+                Included in Pro
+              </span>
+            </div>
+            <div style={{ padding: '20px', paddingRight: '110px' }}>
+              <div style={{ fontSize: '15px', fontWeight: 700, color: T.t1, marginBottom: '6px' }}>
+                Accept payments from customers
+              </div>
+              <div style={{ fontSize: '13px', color: T.t3, lineHeight: 1.6, marginBottom: '16px' }}>
+                Get paid online when customers book your services.
+              </div>
+            </div>
+            <div style={{ paddingLeft: '20px', paddingRight: '20px', paddingBottom: '20px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
+                {[
+                  'Online payments at booking',
+                  'SMS confirmations',
+                  'Custom domain',
+                ].map(item => (
+                  <div key={item} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: T.t2 }}>
+                    <span style={{ color: '#34d399', fontWeight: 700, flexShrink: 0 }}>✓</span>
+                    {item}
+                  </div>
+                ))}
+              </div>
+              <div style={{ borderTop: `1px solid ${T.border}`, marginBottom: '16px' }} />
               <button
-                onClick={startCheckout}
-                disabled={checking || loading || !tenant?.id}
+                onClick={() => startCheckout('pro')}
+                disabled={checkingPlan !== null || !tenant?.id}
                 style={{
-                  padding:    '10px 24px',
-                  fontSize:   '13px',
-                  fontWeight: 700,
-                  fontFamily: 'sans-serif',
-                  borderRadius: '6px',
-                  border:     'none',
-                  background: checking ? T.border : (T.isDark ? '#F4C300' : '#1a1917'),
-                  color:      T.isDark ? '#000' : '#fff',
-                  cursor:     checking || loading ? 'not-allowed' : 'pointer',
-                  opacity:    checking || !tenant?.id ? 0.6 : 1,
-                  transition: 'opacity 0.15s, background 0.15s',
+                  padding:       '10px 24px',
+                  fontSize:      '13px',
+                  fontWeight:    700,
+                  fontFamily:    'sans-serif',
+                  borderRadius:  '6px',
+                  border:        'none',
+                  background:    checkingPlan !== null ? T.border : (T.isDark ? '#F4C300' : '#1a1917'),
+                  color:         T.isDark ? '#000' : '#fff',
+                  cursor:        checkingPlan !== null || !tenant?.id ? 'not-allowed' : 'pointer',
+                  opacity:       checkingPlan !== null || !tenant?.id ? 0.6 : 1,
+                  transition:    'opacity 0.15s, background 0.15s',
                   letterSpacing: '0.02em',
                 }}
               >
-                {checking ? 'Redirecting to checkout…' : 'Start subscription'}
+                {checkingPlan === 'pro' ? 'Redirecting to checkout…' : 'Upgrade to Pro'}
               </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Back link */}
         <Link

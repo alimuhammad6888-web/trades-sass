@@ -75,6 +75,39 @@ function getSubscriptionPeriodEnd(sub: Stripe.Subscription): {
   return { topLevel, itemLevel, resolved, iso }
 }
 
+function mapPriceToPlan(priceId: string | null): string | null {
+  if (!priceId) return null
+
+  const starter = process.env.STRIPE_PRICE_ID_STARTER
+  const pro = process.env.STRIPE_PRICE_ID_PRO
+  const enterprise = process.env.STRIPE_PRICE_ID_ENTERPRISE
+
+  if (starter && priceId === starter) return 'starter'
+  if (pro && priceId === pro) return 'pro'
+  if (enterprise && priceId === enterprise) return 'enterprise'
+
+  console.warn('[stripe webhook] unable to map price to plan:', priceId)
+  return null
+}
+
+async function updateTenantPlan(tenantId: string, plan: string) {
+  const { error } = await supabaseAdmin
+    .from('tenants')
+    .update({ plan })
+    .eq('id', tenantId)
+
+  if (error) {
+    console.error('[stripe webhook] tenant plan update error:', {
+      tenantId,
+      plan,
+      message: error.message,
+    })
+    return
+  }
+
+  console.log('[stripe webhook] tenant plan updated:', { tenantId, plan })
+}
+
 async function updateBillingByTenantId(
   tenantId: string,
   payload: Record<string, unknown>
@@ -142,7 +175,7 @@ async function updateBillingBySubscription(
 
 export async function POST(req: NextRequest) {
   const body = await req.text()
-  const sig  = req.headers.get('stripe-signature')
+  const sig = req.headers.get('stripe-signature')
 
   if (!sig) {
     return NextResponse.json({ error: 'Missing stripe-signature header' }, { status: 400 })
@@ -160,62 +193,72 @@ export async function POST(req: NextRequest) {
   console.log('[stripe webhook] received event:', event.type)
 
   switch (event.type) {
-
     case 'checkout.session.completed': {
-      const session  = event.data.object as Stripe.Checkout.Session
+      const session = event.data.object as Stripe.Checkout.Session
       const tenantId = session.client_reference_id
-      const cusId    = getIdFromExpandable(session.customer)
-      const subId    = getIdFromExpandable(session.subscription)
+      const cusId = getIdFromExpandable(session.customer)
+      const subId = getIdFromExpandable(session.subscription)
 
       if (!tenantId) break
+
+      const sessionPlan =
+        typeof session.metadata?.plan === 'string' ? session.metadata.plan : null
 
       await supabaseAdmin
         .from('tenant_billing')
         .upsert(
           {
-            tenant_id:              tenantId,
-            stripe_customer_id:     cusId ?? null,
+            tenant_id: tenantId,
+            stripe_customer_id: cusId ?? null,
             stripe_subscription_id: subId ?? null,
-            status:                 'active',
-            billing_enabled:        true,
+            status: 'active',
+            billing_enabled: true,
           },
           { onConflict: 'tenant_id' }
         )
+
+      if (sessionPlan) {
+        await updateTenantPlan(tenantId, sessionPlan)
+      }
 
       break
     }
 
     case 'customer.subscription.created':
     case 'customer.subscription.updated': {
-      const sub          = event.data.object as Stripe.Subscription
-      const item         = sub.items.data[0]
-      const cusId        = getIdFromExpandable(sub.customer)
-      const tenantId     = sub.metadata?.tenant_id ?? null
+      const sub = event.data.object as Stripe.Subscription
+      const item = sub.items.data[0]
+      const cusId = getIdFromExpandable(sub.customer)
+      const tenantId = sub.metadata?.tenant_id ?? null
       const mappedStatus = mapStatus(sub.status)
-      const periodInfo   = getSubscriptionPeriodEnd(sub)
+      const periodInfo = getSubscriptionPeriodEnd(sub)
+      const priceId = item?.price?.id ?? null
+      const priceMappedPlan = mapPriceToPlan(priceId)
+      const metadataPlan =
+        typeof sub.metadata?.plan === 'string' ? sub.metadata.plan : null
+      const resolvedPlan = metadataPlan ?? priceMappedPlan
 
-      // ── Status logging ─────────────────────────────────────────
       console.log('[stripe webhook] status resolution →', {
-        eventType:     event.type,
+        eventType: event.type,
         subscriptionId: sub.id,
         tenantId,
-        stripeStatus:  sub.status,
-        mappedStatus:  mappedStatus ?? '(skipped — will not write status)',
-        periodEnd:     periodInfo.iso,
+        stripeStatus: sub.status,
+        mappedStatus: mappedStatus ?? '(skipped — will not write status)',
+        periodEnd: periodInfo.iso,
+        priceId,
+        resolvedPlan,
       })
 
-      // Build payload — only include status if it mapped to a real value.
-      // This prevents 'incomplete' subscriptions from overwriting 'active'.
       const payload: Record<string, unknown> = {
-        stripe_customer_id:     cusId,
+        stripe_customer_id: cusId,
         stripe_subscription_id: sub.id,
-        stripe_price_id:        item?.price?.id ?? null,
-        current_period_end:     periodInfo.iso,
-        cancel_at_period_end:   sub.cancel_at_period_end,
+        stripe_price_id: priceId,
+        current_period_end: periodInfo.iso,
+        cancel_at_period_end: sub.cancel_at_period_end,
       }
 
       if (mappedStatus !== null) {
-        payload.status          = mappedStatus
+        payload.status = mappedStatus
         payload.billing_enabled = mappedStatus === 'active'
       }
 
@@ -223,6 +266,9 @@ export async function POST(req: NextRequest) {
 
       if (tenantId) {
         await updateBillingByTenantId(tenantId, payload)
+        if (resolvedPlan) {
+          await updateTenantPlan(tenantId, resolvedPlan)
+        }
       } else if (cusId) {
         await updateBillingBySubscription(sub.id, cusId, payload)
       }
@@ -231,16 +277,16 @@ export async function POST(req: NextRequest) {
     }
 
     case 'customer.subscription.deleted': {
-      const sub      = event.data.object as Stripe.Subscription
-      const cusId    = getIdFromExpandable(sub.customer)
+      const sub = event.data.object as Stripe.Subscription
+      const cusId = getIdFromExpandable(sub.customer)
       const tenantId = sub.metadata?.tenant_id ?? null
       const periodInfo = getSubscriptionPeriodEnd(sub)
 
       const payload = {
-        status:               'suspended',
-        billing_enabled:      false,
+        status: 'suspended',
+        billing_enabled: false,
         cancel_at_period_end: false,
-        current_period_end:   periodInfo.iso,
+        current_period_end: periodInfo.iso,
       }
 
       if (tenantId) {
@@ -254,8 +300,8 @@ export async function POST(req: NextRequest) {
 
     case 'invoice.payment_failed': {
       const invoice = event.data.object as Stripe.Invoice
-      const subId   = getIdFromExpandable(getField(invoice, 'subscription'))
-      const cusId   = getIdFromExpandable(getField(invoice, 'customer'))
+      const subId = getIdFromExpandable(getField(invoice, 'subscription'))
+      const cusId = getIdFromExpandable(getField(invoice, 'customer'))
 
       if (subId && cusId) {
         await updateBillingBySubscription(subId, cusId, { status: 'past_due' })
