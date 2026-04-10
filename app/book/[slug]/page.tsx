@@ -231,6 +231,11 @@ export default function BookPage() {
             </button>
           ))}
         </div>
+        <div style={{ textAlign:'center', marginTop:'20px' }}>
+          <a href={`/contact/${slug}`} style={{ fontSize:'13px', color:'#888', textDecoration:'none' }}>
+            Need a quote or have a question? Contact us →
+          </a>
+        </div>
       </div>
     </div>
   )
