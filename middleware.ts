@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { slugFromHost } from '@/lib/host'
 
 export async function middleware(request: NextRequest) {
   const host = request.headers.get('host') ?? ''
@@ -14,13 +15,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
-  const slug = isLocalhost
-    ? (url.searchParams.get('tenant') ?? 'demo-plumbing')
-    : host.split('.')[0]
+  const slug = slugFromHost(host, url.searchParams.get('tenant'))
 
   const response = NextResponse.next()
-  response.headers.set('x-tenant-slug', slug)
+  if (slug) response.headers.set('x-tenant-slug', slug)
   return response
 }
 

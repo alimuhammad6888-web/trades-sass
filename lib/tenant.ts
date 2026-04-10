@@ -3,6 +3,7 @@
 // All pages and components read from here — never hardcode TENANT_ID.
 
 import { createClient } from '@supabase/supabase-js'
+import { slugFromHost, DEV_DEFAULT_SLUG } from './host'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -67,26 +68,14 @@ export async function resolveTenant(): Promise<Tenant | null> {
 }
 
 // ── Get slug from URL ─────────────────────────────────────────
-// Localhost: ?tenant=demo-plumbing or default
-// Production: subdomain e.g. joe-plumbing.yourapp.com
+// Uses the shared hostname parser so middleware and client stay in sync.
 
 export function getTenantSlug(): string {
-  if (typeof window === 'undefined') return 'demo-plumbing'
+  if (typeof window === 'undefined') return DEV_DEFAULT_SLUG
 
-  // Check URL param first (local dev)
   const param = new URLSearchParams(window.location.search).get('tenant')
-  if (param) return param
-
-  // Check subdomain (production)
-  const host = window.location.hostname
-  const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1') || host.includes('vercel.app')
-  if (!isLocalhost) {
-    const subdomain = host.split('.')[0]
-    if (subdomain) return subdomain
-  }
-
-  // Default to demo tenant for local dev
-  return 'demo-plumbing'
+  const slug  = slugFromHost(window.location.host, param)
+  return slug ?? DEV_DEFAULT_SLUG
 }
 
 // ── Feature gate hook ─────────────────────────────────────────
