@@ -3,7 +3,7 @@
 import { useState, useEffect, FormEvent } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
-import { adjustHex, getTenantTheme } from '@/lib/tenant-theme'
+import { adjustHex, getTenantTheme, tenantPublicChrome } from '@/lib/tenant-theme'
 
 interface Theme {
   tenantName: string
@@ -132,7 +132,7 @@ export default function ContactPage() {
   return (
     <>
       <style suppressHydrationWarning>{`
-        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;900&family=DM+Sans:wght@400;500;600&display=swap');
+        ${tenantPublicChrome.fontImport}
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         html { scroll-behavior: smooth; }
         body { background: ${bg}; color: ${text}; font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
@@ -142,16 +142,16 @@ export default function ContactPage() {
           border-color: ${brand} !important;
           box-shadow: 0 0 0 2px ${brand}33;
         }
-        .contact-nav { position: fixed; top: 0; left: 0; right: 0; height: 56px; background: ${bg}f2; backdrop-filter: blur(12px); border-bottom: 1px solid ${bgBorder}; display: flex; align-items: center; justify-content: space-between; padding: 0 32px; z-index: 100; }
-        .contact-nav-logo { font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: ${text}; text-decoration: none; }
-        .contact-nav-book { padding: 6px 18px; background: ${brand}; color: ${bg}; font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; text-decoration: none; transition: opacity 0.15s; }
+        .contact-nav { position: fixed; top: 0; left: 0; right: 0; height: ${tenantPublicChrome.navHeight}; background: ${bg}f2; backdrop-filter: blur(12px); border-bottom: 1px solid ${bgBorder}; display: flex; align-items: center; justify-content: space-between; padding: ${tenantPublicChrome.navPadding}; z-index: 100; }
+        .contact-nav-logo { font-family: 'Barlow Condensed', sans-serif; font-size: ${tenantPublicChrome.navLogoFontSize}; font-weight: ${tenantPublicChrome.navLogoFontWeight}; text-transform: uppercase; letter-spacing: ${tenantPublicChrome.navLogoLetterSpacing}; color: ${text}; text-decoration: none; }
+        .contact-nav-book { padding: ${tenantPublicChrome.navButtonPadding}; background: ${brand}; color: ${bg}; font-family: 'Barlow Condensed', sans-serif; font-size: ${tenantPublicChrome.navButtonFontSize}; font-weight: 700; text-transform: uppercase; letter-spacing: ${tenantPublicChrome.navButtonLetterSpacing}; text-decoration: none; transition: opacity 0.15s; }
         .contact-nav-book:hover { opacity: 0.88; }
         .contact-submit { width: 100%; padding: 12px 24px; background: ${brand}; color: ${bg}; border: none; border-radius: 6px; font-family: 'Barlow Condensed', sans-serif; font-size: 17px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; cursor: pointer; transition: opacity 0.15s; }
         .contact-submit:hover:not(:disabled) { opacity: 0.88; }
         .contact-submit:disabled { opacity: 0.45; cursor: not-allowed; }
         .book-link { font-size: 13px; color: ${accent}; text-decoration: none; font-weight: 500; transition: opacity 0.15s; }
         .book-link:hover { opacity: 0.75; }
-        @media (max-width: 500px) { .contact-nav { padding: 0 16px; } .contact-form-card { padding: 24px 20px !important; } }
+        @media (max-width: 500px) { .contact-nav { padding: ${tenantPublicChrome.navPaddingMobile}; } .contact-form-card { padding: 24px 20px !important; } }
       `}</style>
 
       <nav className="contact-nav">
@@ -159,7 +159,7 @@ export default function ContactPage() {
         <a href={`/book/${slug}`} className="contact-nav-book">Book now</a>
       </nav>
 
-      <main style={{ minHeight: '100vh', background: bg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '88px 20px 48px' }}>
+      <main style={{ minHeight: '100vh', background: bg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '92px 20px 48px' }}>
         <div style={{ width: '100%', maxWidth: '500px', animation: 'slide-up 0.5s ease both' }}>
 
           {/* Header */}

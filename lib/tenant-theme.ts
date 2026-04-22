@@ -14,6 +14,19 @@ type TenantThemeOptions = {
   textMutedAmount?: number
 }
 
+export const tenantPublicChrome = {
+  fontImport: "@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600&display=swap');",
+  navHeight: '60px',
+  navPadding: '0 40px',
+  navPaddingMobile: '0 20px',
+  navLogoFontSize: '22px',
+  navLogoFontWeight: 900,
+  navLogoLetterSpacing: '0.05em',
+  navButtonPadding: '8px 20px',
+  navButtonFontSize: '14px',
+  navButtonLetterSpacing: '0.1em',
+} as const
+
 export function adjustHex(hex: string, amount: number): string {
   const num = parseInt(hex.replace('#', ''), 16)
   const r = Math.min(255, Math.max(0, (num >> 16) + amount))

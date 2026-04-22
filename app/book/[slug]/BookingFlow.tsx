@@ -4,7 +4,7 @@
 
 import { useState } from 'react'
 import { hasFeature } from '@/lib/features'
-import { adjustHex, getTenantTheme } from '@/lib/tenant-theme'
+import { adjustHex, getTenantTheme, tenantPublicChrome } from '@/lib/tenant-theme'
 
 type TenantFeatures = {
   payments?: boolean
@@ -163,15 +163,15 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
   const Nav = () => (
     <>
       <style suppressHydrationWarning>{`
-        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=DM+Sans:wght@400;500;600&display=swap');
+        ${tenantPublicChrome.fontImport}
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: ${bg}; }
-        .booking-nav { position: fixed; top: 0; left: 0; right: 0; height: 56px; background: ${bg}f2; backdrop-filter: blur(12px); border-bottom: 1px solid ${bgBorder}; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; z-index: 100; }
-        .booking-nav-logo { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: ${textColor}; text-decoration: none; }
+        .booking-nav { position: fixed; top: 0; left: 0; right: 0; height: ${tenantPublicChrome.navHeight}; background: ${bg}f2; backdrop-filter: blur(12px); border-bottom: 1px solid ${bgBorder}; display: flex; align-items: center; justify-content: space-between; padding: ${tenantPublicChrome.navPadding}; z-index: 100; }
+        .booking-nav-logo { font-family: 'Barlow Condensed', sans-serif; font-size: ${tenantPublicChrome.navLogoFontSize}; font-weight: ${tenantPublicChrome.navLogoFontWeight}; text-transform: uppercase; letter-spacing: ${tenantPublicChrome.navLogoLetterSpacing}; color: ${textColor}; text-decoration: none; }
         .booking-service-btn:hover { border-color: ${brand} !important; }
         .booking-date-btn:hover { opacity: 0.85; }
         .booking-inp-focus:focus { border-color: ${brand} !important; box-shadow: 0 0 0 2px ${brand}33; }
-        @media (max-width: 500px) { .booking-nav { padding: 0 16px; } }
+        @media (max-width: 500px) { .booking-nav { padding: ${tenantPublicChrome.navPaddingMobile}; } }
       `}</style>
       <nav className="booking-nav">
         <a href={`/t/${slug}`} className="booking-nav-logo">{tenant?.name ?? ''}</a>
@@ -201,7 +201,7 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
     return (
       <div style={page}>
         <Nav />
-        <div style={{ ...wrap, paddingTop: '76px' }}>
+        <div style={{ ...wrap, paddingTop: '80px' }}>
           <div style={{ marginBottom: '8px' }}>
             <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.18em', color: accent, marginBottom: '6px' }}>Step 1 of 4</div>
             <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: '28px', fontWeight: 900, textTransform: 'uppercase', color: textColor, marginBottom: '4px' }}>What do you need?</h2>
@@ -231,7 +231,7 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
     return (
       <div style={page}>
         <Nav />
-        <div style={{ ...wrap, paddingTop: '76px' }}>
+        <div style={{ ...wrap, paddingTop: '80px' }}>
           <button style={back} onClick={() => setStep('service')}>← Back</button>
           <div style={cardWrap}>
             <div style={cardHead}>
@@ -287,7 +287,7 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
     return (
       <div style={page}>
         <Nav />
-        <div style={{ ...wrap, paddingTop: '76px' }}>
+        <div style={{ ...wrap, paddingTop: '80px' }}>
           <button style={back} onClick={() => setStep('datetime')}>← Back</button>
           <div style={cardWrap}>
             <div style={cardHead}>
@@ -338,7 +338,7 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
     return (
       <div style={page}>
         <Nav />
-        <div style={{ ...wrap, paddingTop: '76px' }}>
+        <div style={{ ...wrap, paddingTop: '80px' }}>
           <button style={back} onClick={() => setStep('details')}>← Back</button>
           <div style={cardWrap}>
             <div style={cardHead}>
@@ -394,7 +394,7 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
   return (
     <div style={page}>
       <Nav />
-      <div style={{ ...wrap, paddingTop: '76px', textAlign: 'center' }}>
+      <div style={{ ...wrap, paddingTop: '80px', textAlign: 'center' }}>
         <div style={{ width: '64px', height: '64px', background: brand, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '20px auto' }}>
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
             <path d="M5 13l4 4L19 7" stroke={bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />

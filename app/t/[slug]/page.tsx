@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 import { notFound } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
-import { adjustHex, getTenantTheme } from '@/lib/tenant-theme'
+import { adjustHex, getTenantTheme, tenantPublicChrome } from '@/lib/tenant-theme'
 
 const SERVICE_ICONS: Record<string, string> = {
   'Panel Upgrade': '⚡', 'EV Charger Install': '🔌', 'Ceiling Fan Install': '💨',
@@ -77,7 +77,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
   return (
     <>
       <style suppressHydrationWarning>{`
-        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=DM+Sans:wght@400;500&display=swap');
+        ${tenantPublicChrome.fontImport}
         *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
         html { scroll-behavior:smooth; }
         body { background:${bg}; color:${text}; font-family:'DM Sans',sans-serif; -webkit-font-smoothing:antialiased; }
@@ -120,13 +120,13 @@ export default async function LandingPage({ params }: { params: { slug: string }
         .service-arrow { position:absolute; bottom:20px; right:20px; color:${accent}; opacity:0; transition:opacity 0.2s,transform 0.2s; font-size:18px; }
         .service-card:hover .service-arrow { opacity:1; transform:translate(2px,-2px); }
 
-        .nav { position:fixed; top:0; left:0; right:0; z-index:100; padding:0 40px; height:60px; display:flex; align-items:center; justify-content:space-between; background:${bg}f2; backdrop-filter:blur(12px); border-bottom:1px solid ${bgBorder}; }
-        .nav-logo { font-family:'Barlow Condensed',sans-serif; font-size:22px; font-weight:900; text-transform:uppercase; letter-spacing:0.05em; color:${text}; }
+        .nav { position:fixed; top:0; left:0; right:0; z-index:100; padding:${tenantPublicChrome.navPadding}; height:${tenantPublicChrome.navHeight}; display:flex; align-items:center; justify-content:space-between; background:${bg}f2; backdrop-filter:blur(12px); border-bottom:1px solid ${bgBorder}; }
+        .nav-logo { font-family:'Barlow Condensed',sans-serif; font-size:${tenantPublicChrome.navLogoFontSize}; font-weight:${tenantPublicChrome.navLogoFontWeight}; text-transform:uppercase; letter-spacing:${tenantPublicChrome.navLogoLetterSpacing}; color:${text}; }
         .nav-logo span { color:${accent}; }
         .nav-links { display:flex; align-items:center; gap:24px; }
         .nav-link { color:${textMuted}; font-size:13px; text-decoration:none; transition:color 0.15s; font-weight:500; }
         .nav-link:hover { color:${text}; }
-        .nav-book { padding:8px 20px; background:${brand}; color:${bg}; font-family:'Barlow Condensed',sans-serif; font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; text-decoration:none; transition:opacity 0.15s; }
+        .nav-book { padding:${tenantPublicChrome.navButtonPadding}; background:${brand}; color:${bg}; font-family:'Barlow Condensed',sans-serif; font-size:${tenantPublicChrome.navButtonFontSize}; font-weight:700; text-transform:uppercase; letter-spacing:${tenantPublicChrome.navButtonLetterSpacing}; text-decoration:none; transition:opacity 0.15s; }
         .nav-book:hover { opacity:0.88; }
 
         .why-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:${bgBorder}; border:1px solid ${bgBorder}; border-radius:12px; overflow:hidden; }
@@ -144,7 +144,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
         .cta-book-link:hover { opacity:0.85; }
 
         @media (max-width:900px) { .services-grid{grid-template-columns:repeat(2,1fr)} .why-grid{grid-template-columns:1fr} .nav-links .nav-link{display:none} }
-        @media (max-width:500px) { .services-grid{grid-template-columns:1fr} .nav{padding:0 20px} .bolt-deco{display:none} }
+        @media (max-width:500px) { .services-grid{grid-template-columns:1fr} .nav{padding:${tenantPublicChrome.navPaddingMobile}} .bolt-deco{display:none} }
       `}</style>
 
       <nav className="nav">
