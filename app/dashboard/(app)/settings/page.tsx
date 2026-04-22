@@ -19,7 +19,7 @@ const PALETTES = [
   { label:'Midnight', p:'#1e1b4b', a:'#818cf8' },
 ]
 
-function WebsitePreview({ site, pp, pa, bizName }: { site: any; pp: string; pa: string; bizName: string }) {
+function WebsitePreview({ site, pp, pa, bg, text, bizName }: { site: any; pp: string; pa: string; bg: string; text: string; bizName: string }) {
   return (
     <div style={{ position:'sticky', top:'20px' }}>
       <div style={{ fontSize:'10px', fontWeight:500, textTransform:'uppercase' as any, letterSpacing:'0.07em', color:'#888', marginBottom:'10px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
@@ -28,24 +28,24 @@ function WebsitePreview({ site, pp, pa, bizName }: { site: any; pp: string; pa: 
           {site.is_published ? '🟢 Live' : '⚪ Draft'}
         </span>
       </div>
-      <div style={{ border:'1px solid #1a1a1a', borderRadius:'8px', overflow:'hidden', background:'#0a0a0a' }}>
+      <div style={{ border:`1px solid ${bg}`, borderRadius:'8px', overflow:'hidden', background:bg }}>
         {/* Nav */}
-        <div style={{ background:'rgba(10,10,10,0.95)', padding:'8px 12px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid #1a1a1a' }}>
-          <span style={{ color:'#fff', fontWeight:900, fontSize:'10px', textTransform:'uppercase' as any, letterSpacing:'0.05em' }}>{bizName||'Your Business'}</span>
-          <span style={{ background:pp, color:'#000', padding:'3px 8px', fontSize:'9px', fontWeight:700, textTransform:'uppercase' as any, letterSpacing:'0.08em' }}>Book now</span>
+        <div style={{ background:bg, padding:'8px 12px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:`1px solid ${pa}22` }}>
+          <span style={{ color:text, fontWeight:900, fontSize:'10px', textTransform:'uppercase' as any, letterSpacing:'0.05em' }}>{bizName||'Your Business'}</span>
+          <span style={{ background:pp, color:bg, padding:'3px 8px', fontSize:'9px', fontWeight:700, textTransform:'uppercase' as any, letterSpacing:'0.08em' }}>Book now</span>
         </div>
         {/* Hero */}
-        <div style={{ background:'#0a0a0a', padding:'16px 12px', borderBottom:'1px solid #111' }}>
+        <div style={{ background:bg, padding:'16px 12px', borderBottom:`1px solid ${pa}22` }}>
           <div style={{ fontSize:'9px', color:pa, fontWeight:600, textTransform:'uppercase' as any, letterSpacing:'0.15em', marginBottom:'6px' }}>
             {site.hero_badge || 'Now accepting online bookings'}
           </div>
-          <div style={{ fontSize:'18px', fontWeight:900, color:'#fff', textTransform:'uppercase' as any, lineHeight:0.9, letterSpacing:'-0.01em', marginBottom:'6px' }}>
+          <div style={{ fontSize:'18px', fontWeight:900, color:text, textTransform:'uppercase' as any, lineHeight:0.9, letterSpacing:'-0.01em', marginBottom:'6px' }}>
             {(site.hero_headline || 'Your Business').slice(0, 22)}
           </div>
-          <div style={{ fontSize:'9px', color:'#555', textTransform:'uppercase' as any, letterSpacing:'0.04em', marginBottom:'10px' }}>
+          <div style={{ fontSize:'9px', color:text, opacity:0.45, textTransform:'uppercase' as any, letterSpacing:'0.04em', marginBottom:'10px' }}>
             {(site.hero_subheadline || '').slice(0, 44)}
           </div>
-          <div style={{ display:'inline-flex', alignItems:'center', gap:'4px', padding:'5px 10px', background:pp, color:'#000', fontSize:'9px', fontWeight:700, textTransform:'uppercase' as any, letterSpacing:'0.08em' }}>
+          <div style={{ display:'inline-flex', alignItems:'center', gap:'4px', padding:'5px 10px', background:pp, color:bg, fontSize:'9px', fontWeight:700, textTransform:'uppercase' as any, letterSpacing:'0.08em' }}>
             ⚡ {(site.cta_primary_text || 'Book a service').slice(0, 20)}
           </div>
         </div>
@@ -53,20 +53,20 @@ function WebsitePreview({ site, pp, pa, bizName }: { site: any; pp: string; pa: 
         <div style={{ background:pp, padding:'8px 12px', display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'4px', textAlign:'center' }}>
           {(site.stats_json || []).slice(0, 3).map((s: any, i: number) => (
             <div key={i}>
-              <div style={{ fontSize:'11px', fontWeight:900, color:'#000', lineHeight:1 }}>{s.value || s.num}</div>
-              <div style={{ fontSize:'7px', color:'#333', textTransform:'uppercase' as any, letterSpacing:'0.06em' }}>{s.label}</div>
+              <div style={{ fontSize:'11px', fontWeight:900, color:bg, lineHeight:1 }}>{s.value || s.num}</div>
+              <div style={{ fontSize:'7px', color:bg, opacity:0.6, textTransform:'uppercase' as any, letterSpacing:'0.06em' }}>{s.label}</div>
             </div>
           ))}
         </div>
         {/* Why us */}
         {(site.why_us_json || []).length > 0 && (
-          <div style={{ padding:'10px 12px', borderTop:'1px solid #111', display:'flex', flexDirection:'column', gap:'8px' }}>
+          <div style={{ padding:'10px 12px', borderTop:`1px solid ${pa}22`, display:'flex', flexDirection:'column', gap:'8px' }}>
             {(site.why_us_json || []).slice(0, 3).map((w: any, i: number) => (
               <div key={i} style={{ display:'flex', gap:'6px', alignItems:'flex-start' }}>
                 <span style={{ fontSize:'12px', fontWeight:900, color:pa, opacity:0.9, flexShrink:0 }}>{String(i+1).padStart(2,'0')}</span>
                 <div>
-                  <div style={{ fontSize:'9px', fontWeight:700, color:'#fff', textTransform:'uppercase' as any }}>{w.title}</div>
-                  <div style={{ fontSize:'8px', color:'#555', lineHeight:1.4, marginTop:'1px' }}>{(w.desc||'').slice(0, 44)}</div>
+                  <div style={{ fontSize:'9px', fontWeight:700, color:text, textTransform:'uppercase' as any }}>{w.title}</div>
+                  <div style={{ fontSize:'8px', color:text, opacity:0.45, lineHeight:1.4, marginTop:'1px' }}>{(w.desc||'').slice(0, 44)}</div>
                 </div>
               </div>
             ))}
@@ -74,17 +74,17 @@ function WebsitePreview({ site, pp, pa, bizName }: { site: any; pp: string; pa: 
         )}
         {/* CTA banner */}
         <div style={{ background:pp, padding:'10px 12px', textAlign:'center' }}>
-          <div style={{ fontSize:'13px', fontWeight:900, color:'#000', textTransform:'uppercase' as any, lineHeight:0.9, marginBottom:'4px' }}>
+          <div style={{ fontSize:'13px', fontWeight:900, color:bg, textTransform:'uppercase' as any, lineHeight:0.9, marginBottom:'4px' }}>
             {(site.cta_secondary_text || 'Ready to get started?').slice(0, 24)}
           </div>
           {site.cta_description && (
-            <div style={{ fontSize:'8px', color:'#333', marginBottom:'4px' }}>{site.cta_description.slice(0, 54)}</div>
+            <div style={{ fontSize:'8px', color:bg, opacity:0.6, marginBottom:'4px' }}>{site.cta_description.slice(0, 54)}</div>
           )}
         </div>
         {/* Footer */}
-        <div style={{ background:'#050505', padding:'8px 12px', display:'flex', alignItems:'center', justifyContent:'space-between', borderTop:'1px solid #111' }}>
-          <div style={{ fontSize:'9px', fontWeight:900, color:'#fff', textTransform:'uppercase' as any }}>{bizName||'Your Business'}</div>
-          <div style={{ fontSize:'8px', color:'#333' }}>{(site.footer_tagline||'').slice(0, 24)}</div>
+        <div style={{ background:bg, padding:'8px 12px', display:'flex', alignItems:'center', justifyContent:'space-between', borderTop:`1px solid ${pa}22` }}>
+          <div style={{ fontSize:'9px', fontWeight:900, color:text, textTransform:'uppercase' as any }}>{bizName||'Your Business'}</div>
+          <div style={{ fontSize:'8px', color:text, opacity:0.35 }}>{(site.footer_tagline||'').slice(0, 24)}</div>
         </div>
       </div>
     </div>
@@ -106,6 +106,8 @@ export default function SettingsPage() {
     booking_lead_time_hours: 2, booking_window_days: 60,
     auto_confirm_bookings: false,
     notification_email: '', notification_phone: '',
+    bg_color: '#0a0a0a',
+    text_color: '#ffffff',
   })
 
   const [site, setSite] = useState({
@@ -166,6 +168,8 @@ export default function SettingsPage() {
           ...f,
           primary_color:            s.primary_color            ?? f.primary_color,
           accent_color:             s.accent_color             ?? f.accent_color,
+          bg_color:                 s.bg_color                 ?? f.bg_color,
+          text_color:               s.text_color               ?? f.text_color,
           tagline:                  s.tagline                  ?? '',
           phone:                    s.phone                    ?? '',
           email:                    s.email                    ?? '',
@@ -246,6 +250,8 @@ export default function SettingsPage() {
 
   const pp = form.primary_color
   const pa = form.accent_color
+  const pb = form.bg_color
+  const pt = form.text_color
   const pr = ({ sharp:'0px', soft:'6px', round:'14px' } as any)[form.border_radius] ?? '6px'
   const pf = ({ sans:"'DM Sans',sans-serif", serif:'Georgia,serif', slab:'Rockwell,serif' } as any)[form.font_style] ?? 'sans-serif'
 
@@ -308,23 +314,39 @@ export default function SettingsPage() {
                 <div style={card}>
                   <div style={cardTitle}>Colors</div>
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', marginBottom:'16px' }}>
-                    {[{key:'primary_color',label:'Primary color'},{key:'accent_color',label:'Accent color'}].map(f => (
+                    {[
+                      { key:'primary_color', label:'Primary color' },
+                      { key:'accent_color',  label:'Accent color' },
+                      { key:'bg_color',      label:'Background color' },
+                      { key:'text_color',    label:'Text color' },
+                    ].map(f => (
                       <div key={f.key}>
                         <label style={lbl}>{f.label}</label>
                         <div style={{ display:'flex', alignItems:'center', gap:'10px', border:`1px solid ${T.inputBorder}`, borderRadius:'6px', padding:'8px 12px', background:T.input }}>
-                          <input type="color" value={(form as any)[f.key]} onChange={e => update(f.key, e.target.value)}
-                            style={{ width:'40px', height:'30px', border:`1px solid ${T.border}`, borderRadius:'4px', cursor:'pointer', padding:'2px', background:'none' }} />
-                          <span style={{ fontFamily:'monospace', fontSize:'12px', color:T.t1 }}>{(form as any)[f.key]}</span>
+                          <input
+                            type="color"
+                            value={(form as any)[f.key]}
+                            onChange={e => update(f.key, e.target.value)}
+                            style={{ width:'40px', height:'30px', border:`1px solid ${T.border}`, borderRadius:'4px', cursor:'pointer', padding:'2px', background:'none' }}
+                          />
+                          <span style={{ fontFamily:'monospace', fontSize:'12px', color:T.t1 }}>
+                            {(form as any)[f.key]}
+                          </span>
                         </div>
                       </div>
                     ))}
                   </div>
+
                   <label style={lbl}>Quick palettes</label>
                   <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' as any }}>
                     {PALETTES.map(pal => (
-                      <button key={pal.label} onClick={() => { update('primary_color', pal.p); update('accent_color', pal.a) }}
-                        style={{ display:'flex', alignItems:'center', gap:'6px', padding:'5px 12px', border:`1.5px solid ${form.primary_color===pal.p?pal.p:T.border}`, borderRadius:'20px', background:form.primary_color===pal.p?pal.p+'22':T.card, cursor:'pointer', fontSize:'12px', fontWeight:500, fontFamily:'sans-serif', color:T.t1, transition:'all 0.15s' }}>
-                        <div style={{ width:'10px', height:'10px', borderRadius:'50%', background:pal.p }} />{pal.label}
+                      <button
+                        key={pal.label}
+                        onClick={() => { update('primary_color', pal.p); update('accent_color', pal.a) }}
+                        style={{ display:'flex', alignItems:'center', gap:'6px', padding:'5px 12px', border:`1.5px solid ${form.primary_color===pal.p ? pal.p : T.border}`, borderRadius:'20px', background:form.primary_color===pal.p ? pal.p+'22' : T.card, cursor:'pointer', fontSize:'12px', fontWeight:500, fontFamily:'sans-serif', color:T.t1, transition:'all 0.15s' }}
+                      >
+                        <div style={{ width:'10px', height:'10px', borderRadius:'50%', background:pal.p }} />
+                        {pal.label}
                       </button>
                     ))}
                   </div>
@@ -391,14 +413,12 @@ export default function SettingsPage() {
                   <p style={{ fontSize:'13px', color:T.t3, marginBottom:'20px', lineHeight:1.6 }}>
                     Where should we send booking alerts? These are private — not shown to customers. If left blank we'll use your business contact details above.
                   </p>
-
                   <div style={{ display:'flex', flexDirection:'column', gap:'16px' }}>
                     <div>
                       <label style={lbl}>Notification email</label>
                       <input style={inp} type="email" value={form.notification_email} onChange={e => update('notification_email', e.target.value)} placeholder="you@gmail.com" />
                       <div style={hint}>New booking requests and confirmation links are sent here. Use your personal email, not the business one.</div>
                     </div>
-
                     <div>
                       <label style={lbl}>Notification phone (SMS)</label>
                       <input style={inp} type="tel" value={form.notification_phone} onChange={e => update('notification_phone', e.target.value)} placeholder="(555) 000-0000" />
@@ -407,7 +427,6 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                {/* Status preview */}
                 <div style={{ ...card, background:T.isDark?'#111':'#f8f6f1' }}>
                   <div style={cardTitle}>Current notification routing</div>
                   <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
@@ -476,7 +495,6 @@ export default function SettingsPage() {
             {/* ── WEBSITE ── */}
             {tab === 'website' && (
               <>
-                {/* Publish toggle */}
                 <div style={{ ...card, border:`1px solid ${site.is_published?(T.isDark?'#1a3a2a':'#c3e6cb'):T.border}`, background:site.is_published?(T.isDark?'#0a1a12':'#f0faf4'):T.card }}>
                   <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                     <div>
@@ -495,7 +513,6 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                {/* Hero section */}
                 <div style={card}>
                   <div style={cardTitle}>Hero section</div>
                   <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
@@ -515,7 +532,6 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                {/* Stats */}
                 <div style={card}>
                   <div style={cardTitle}>Stats bar</div>
                   <p style={{ fontSize:'12px', color:T.t3, marginBottom:'14px' }}>Three key numbers shown below the hero.</p>
@@ -529,7 +545,6 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                {/* Why us */}
                 <div style={card}>
                   <div style={cardTitle}>Why choose us</div>
                   <p style={{ fontSize:'12px', color:T.t3, marginBottom:'14px' }}>Three selling points shown on the homepage.</p>
@@ -555,7 +570,6 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                {/* CTAs & footer */}
                 <div style={card}>
                   <div style={cardTitle}>Buttons & footer</div>
                   <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
@@ -591,23 +605,26 @@ export default function SettingsPage() {
             {tab === 'branding' && (
               <div style={{ position:'sticky', top:'20px' }}>
                 <div style={{ fontSize:'10px', fontWeight:500, textTransform:'uppercase' as any, letterSpacing:'0.07em', color:T.label, marginBottom:'10px' }}>Live preview</div>
-                <div style={{ border:`1px solid ${T.border}`, borderRadius:'8px', overflow:'hidden' }}>
-                  <div style={{ background:'#111', padding:'10px 14px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <div style={{ border:`1px solid ${pa}33`, borderRadius:'8px', overflow:'hidden' }}>
+                  {/* Nav */}
+                  <div style={{ background:pb, padding:'10px 14px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                     <span style={{ color:pp, fontWeight:800, fontSize:'13px', textTransform:'uppercase' as any, fontFamily:pf }}>{bizName||'Your Business'}</span>
-                    <span style={{ background:pp, color:'#000', padding:'4px 10px', borderRadius:pr, fontSize:'10px', fontWeight:700, textTransform:'uppercase' as any }}>Book now</span>
+                    <span style={{ background:pp, color:pb, padding:'4px 10px', borderRadius:pr, fontSize:'10px', fontWeight:700, textTransform:'uppercase' as any }}>Book now</span>
                   </div>
-                  <div style={{ background:'#0d0d0d', padding:'20px 16px' }}>
-                    <div style={{ fontSize:'26px', fontWeight:800, color:'#fff', textTransform:'uppercase' as any, lineHeight:1, marginBottom:'6px', fontFamily:pf }}>
+                  {/* Hero */}
+                  <div style={{ background:pb, padding:'20px 16px' }}>
+                    <div style={{ fontSize:'26px', fontWeight:800, color:pt, textTransform:'uppercase' as any, lineHeight:1, marginBottom:'6px', fontFamily:pf }}>
                       {bizName?.split(' ')[0]||'Your'}<br /><span style={{ color:pp }}>{bizName?.split(' ').slice(1).join(' ')||'Business'}</span>
                     </div>
-                    <div style={{ fontSize:'11px', color:'#666', marginBottom:'14px' }}>{form.tagline||'Your tagline here'}</div>
-                    <div style={{ display:'inline-flex', padding:'8px 14px', background:pp, color:'#000', borderRadius:pr, fontSize:'11px', fontWeight:700, textTransform:'uppercase' as any, fontFamily:pf }}>⚡ Book a service</div>
+                    <div style={{ fontSize:'11px', color:pt, opacity:0.45, marginBottom:'14px' }}>{form.tagline||'Your tagline here'}</div>
+                    <div style={{ display:'inline-flex', padding:'8px 14px', background:pp, color:pb, borderRadius:pr, fontSize:'11px', fontWeight:700, textTransform:'uppercase' as any, fontFamily:pf }}>⚡ Book a service</div>
                   </div>
-                  <div style={{ padding:'12px', background:'#0a0a0a' }}>
-                    <div style={{ border:'1px solid #222', borderRadius:pr, padding:'12px', background:'#111', position:'relative', overflow:'hidden' }}>
+                  {/* Service card */}
+                  <div style={{ padding:'12px', background:pb }}>
+                    <div style={{ border:`1px solid ${pa}33`, borderRadius:pr, padding:'12px', background:pb, position:'relative', overflow:'hidden' }}>
                       <div style={{ position:'absolute', top:0, left:0, right:0, height:'2px', background:pp }} />
-                      <div style={{ fontSize:'12px', fontWeight:700, color:'#fff', textTransform:'uppercase' as any, marginBottom:'4px', fontFamily:pf }}>Panel Upgrade</div>
-                      <div style={{ fontSize:'10px', color:'#666', marginBottom:'8px' }}>200A service, permitted and inspected.</div>
+                      <div style={{ fontSize:'12px', fontWeight:700, color:pt, textTransform:'uppercase' as any, marginBottom:'4px', fontFamily:pf }}>Panel Upgrade</div>
+                      <div style={{ fontSize:'10px', color:pt, opacity:0.45, marginBottom:'8px' }}>200A service, permitted and inspected.</div>
                       <div style={{ fontSize:'11px', color:pa, fontWeight:600 }}>$1,500 · Full day</div>
                     </div>
                   </div>
@@ -615,7 +632,7 @@ export default function SettingsPage() {
               </div>
             )}
             {tab === 'website' && (
-              <WebsitePreview site={site} pp={pp} pa={pa} bizName={bizName} />
+              <WebsitePreview site={site} pp={pp} pa={pa} bg={pb} text={pt} bizName={bizName} />
             )}
           </div>
         </div>
