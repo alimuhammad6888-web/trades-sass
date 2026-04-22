@@ -3,14 +3,7 @@
 import { useState, useEffect, FormEvent } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
-
-function adjustHex(hex: string, amount: number): string {
-  const num = parseInt(hex.replace('#', ''), 16)
-  const r = Math.min(255, Math.max(0, (num >> 16) + amount))
-  const g = Math.min(255, Math.max(0, ((num >> 8) & 0xff) + amount))
-  const b = Math.min(255, Math.max(0, (num & 0xff) + amount))
-  return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('')
-}
+import { adjustHex, getTenantTheme } from '@/lib/tenant-theme'
 
 interface Theme {
   tenantName: string
@@ -62,17 +55,11 @@ export default function ContactPage() {
         .select('primary_color, accent_color, bg_color, text_color, logo_url')
         .eq('tenant_id', tenant.id)
         .maybeSingle()
-      const brand  = settings?.primary_color || '#F4C300'
-      const accent = settings?.accent_color  || brand
-      const bg     = settings?.bg_color      || '#0a0a0a'
-      const text   = settings?.text_color    || '#ffffff'
+      const tenantTheme = getTenantTheme(settings)
       setTheme({
         tenantName: tenant.name,
         logoUrl:    settings?.logo_url ?? null,
-        brand, accent, bg, text,
-        bgSurface: adjustHex(bg,    8),
-        bgBorder:  adjustHex(bg,   20),
-        textMuted: adjustHex(text, -120),
+        ...tenantTheme,
       })
       setLoading(false)
     })

@@ -4,6 +4,7 @@
 
 import { useState } from 'react'
 import { hasFeature } from '@/lib/features'
+import { adjustHex, getTenantTheme } from '@/lib/tenant-theme'
 
 type TenantFeatures = {
   payments?: boolean
@@ -33,14 +34,6 @@ interface Props {
   slug: string
   initialTenant: Tenant | null
   initialServices: Service[]
-}
-
-function adjustHex(hex: string, amount: number): string {
-  const num = parseInt(hex.replace('#', ''), 16)
-  const r = Math.min(255, Math.max(0, (num >> 16) + amount))
-  const g = Math.min(255, Math.max(0, ((num >> 8) & 0xff) + amount))
-  const b = Math.min(255, Math.max(0, (num & 0xff) + amount))
-  return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('')
 }
 
 function formatPrice(cents: number | null) {
@@ -95,14 +88,13 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
   const paymentsEnabled = hasFeature(tenant, 'payments')
 
   // ── Theme ─────────────────────────────────────────────────────────────────
-  const brand     = tenant?.primary_color || '#F4C300'
-  const accent    = tenant?.accent_color  || brand
-  const bg        = tenant?.bg_color      || '#0d0d0d'
-  const textColor = tenant?.text_color    || '#ffffff'
-  const bgSurface = adjustHex(bg,   10)
-  const bgCard    = adjustHex(bg,   16)
-  const bgBorder  = adjustHex(bg,   28)
-  const textMuted = adjustHex(textColor, -130)
+  const { brand, accent, bg, textColor, bgSurface, bgCard, bgBorder, textMuted } = getTenantTheme(tenant, {
+    fallbackBg: '#0d0d0d',
+    bgSurfaceAmount: 10,
+    bgCardAmount: 16,
+    bgBorderAmount: 28,
+    textMutedAmount: -130,
+  })
 
   // ── Validation ────────────────────────────────────────────────────────────
   function validate() {

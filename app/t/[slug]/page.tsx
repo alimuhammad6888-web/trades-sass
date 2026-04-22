@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 import { notFound } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
+import { adjustHex, getTenantTheme } from '@/lib/tenant-theme'
 
 const SERVICE_ICONS: Record<string, string> = {
   'Panel Upgrade': '⚡', 'EV Charger Install': '🔌', 'Ceiling Fan Install': '💨',
@@ -14,15 +15,6 @@ const SERVICE_ICONS: Record<string, string> = {
 
 function formatPrice(cents: number | null) {
   return cents ? '$' + (cents / 100).toFixed(0) : 'Get a quote'
-}
-
-// Derive a slightly lighter or darker surface from a hex color
-function adjustHex(hex: string, amount: number): string {
-  const num = parseInt(hex.replace('#', ''), 16)
-  const r = Math.min(255, Math.max(0, (num >> 16) + amount))
-  const g = Math.min(255, Math.max(0, ((num >> 8) & 0xff) + amount))
-  const b = Math.min(255, Math.max(0, (num & 0xff) + amount))
-  return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('')
 }
 
 export default async function LandingPage({ params }: { params: { slug: string } }) {
@@ -61,16 +53,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
       .maybeSingle(),
   ])
 
-  const brand  = settings?.primary_color || '#F4C300'
-  const accent = settings?.accent_color  || brand
-  const bg     = settings?.bg_color      || '#0a0a0a'
-  const text   = settings?.text_color    || '#ffffff'
-
-  // Derived surface colors from bg
-  const bgSurface  = adjustHex(bg,  8)   // slightly lighter than bg for cards
-  const bgDeep     = adjustHex(bg, -4)   // slightly darker than bg for footers
-  const bgBorder   = adjustHex(bg, 20)   // border lines
-  const textMuted  = adjustHex(text, -120) // muted/secondary text derived from text color
+  const { brand, accent, bg, text, bgSurface, bgDeep, bgBorder, textMuted } = getTenantTheme(settings)
 
   const stats = siteContent?.stats_json  || []
   const whyUs = siteContent?.why_us_json || []
