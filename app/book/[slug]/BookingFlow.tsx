@@ -4,7 +4,7 @@
 
 import { useState } from 'react'
 import { hasFeature } from '@/lib/features'
-import { adjustHex, getTenantTheme, tenantPublicChrome } from '@/lib/tenant-theme'
+import { adjustHex, getTenantBrandMarkCss, getTenantTheme, tenantPublicChrome } from '@/lib/tenant-theme'
 
 type TenantFeatures = {
   payments?: boolean
@@ -148,14 +148,14 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
   }
 
   // ── Shared style helpers ─────────────────────────────────────────────────
-  const page: React.CSSProperties    = { minHeight: '100vh', background: bg, color: textColor, fontFamily: "'DM Sans', sans-serif" }
+  const page: React.CSSProperties    = { minHeight: '100vh', background: bg, color: textColor, fontFamily: tenantPublicChrome.fontSans }
   const wrap: React.CSSProperties    = { maxWidth: '560px', margin: '0 auto', padding: '28px 20px' }
   const cardWrap: React.CSSProperties = { background: bgCard, border: `1px solid ${bgBorder}`, borderRadius: '10px', overflow: 'hidden' }
   const cardHead: React.CSSProperties = { padding: '14px 20px', borderBottom: `1px solid ${bgBorder}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }
   const cardBody: React.CSSProperties = { padding: '20px' }
-  const btn: React.CSSProperties     = { padding: '12px 24px', background: brand, color: bg, border: 'none', borderRadius: '6px', fontSize: '15px', fontWeight: 700, cursor: 'pointer', width: '100%', marginTop: '16px', fontFamily: "'Barlow Condensed', sans-serif", textTransform: 'uppercase', letterSpacing: '0.08em' }
-  const back: React.CSSProperties    = { background: 'none', border: 'none', color: textMuted, fontSize: '13px', cursor: 'pointer', padding: 0, marginBottom: '16px', fontFamily: "'DM Sans', sans-serif" }
-  const inp: React.CSSProperties     = { width: '100%', padding: '9px 12px', background: bgSurface, border: `1px solid ${bgBorder}`, borderRadius: '6px', color: textColor, fontSize: '14px', fontFamily: "'DM Sans', sans-serif", boxSizing: 'border-box', outline: 'none' }
+  const btn: React.CSSProperties     = { padding: '12px 24px', background: brand, color: bg, border: 'none', borderRadius: '6px', fontSize: '15px', fontWeight: 700, cursor: 'pointer', width: '100%', marginTop: '16px', fontFamily: tenantPublicChrome.fontDisplay, textTransform: 'uppercase', letterSpacing: '0.08em' }
+  const back: React.CSSProperties    = { background: 'none', border: 'none', color: textMuted, fontSize: '13px', cursor: 'pointer', padding: 0, marginBottom: '16px', fontFamily: tenantPublicChrome.fontSans }
+  const inp: React.CSSProperties     = { width: '100%', padding: '9px 12px', background: bgSurface, border: `1px solid ${bgBorder}`, borderRadius: '6px', color: textColor, fontSize: '14px', fontFamily: tenantPublicChrome.fontSans, boxSizing: 'border-box', outline: 'none' }
   const lbl: React.CSSProperties     = { fontSize: '11px', fontWeight: 600, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '5px' }
   const errStyle: React.CSSProperties = { fontSize: '11px', color: accent, marginTop: '3px' }
 
@@ -163,11 +163,11 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
   const Nav = () => (
     <>
       <style suppressHydrationWarning>{`
-        ${tenantPublicChrome.fontImport}
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: ${bg}; }
         .booking-nav { position: fixed; top: 0; left: 0; right: 0; height: ${tenantPublicChrome.navHeight}; background: ${bg}f2; backdrop-filter: blur(12px); border-bottom: 1px solid ${bgBorder}; display: flex; align-items: center; justify-content: space-between; padding: ${tenantPublicChrome.navPadding}; z-index: 100; }
-        .booking-nav-logo { font-family: 'Barlow Condensed', sans-serif; font-size: ${tenantPublicChrome.navLogoFontSize}; font-weight: ${tenantPublicChrome.navLogoFontWeight}; text-transform: uppercase; letter-spacing: ${tenantPublicChrome.navLogoLetterSpacing}; color: ${textColor}; text-decoration: none; }
+        ${getTenantBrandMarkCss('.booking-nav-logo', textColor)}
+        .booking-nav-logo { text-decoration: none; }
         .booking-service-btn:hover { border-color: ${brand} !important; }
         .booking-date-btn:hover { opacity: 0.85; }
         .booking-inp-focus:focus { border-color: ${brand} !important; box-shadow: 0 0 0 2px ${brand}33; }
@@ -188,7 +188,7 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
       <div style={page}>
         <Nav />
         <div style={{ paddingTop: '80px', padding: '80px 40px 40px', textAlign: 'center' }}>
-          <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: '28px', fontWeight: 900, textTransform: 'uppercase', color: brand, marginBottom: '10px' }}>{tenant.name}</h2>
+          <h2 style={{ fontFamily: tenantPublicChrome.fontDisplay, fontSize: '28px', fontWeight: 900, textTransform: 'uppercase', color: brand, marginBottom: '10px' }}>{tenant.name}</h2>
           <p style={{ color: textMuted, fontSize: '14px', lineHeight: 1.6 }}>This business is not accepting online bookings yet.</p>
           <p style={{ marginTop: '6px', fontSize: '13px', color: adjustHex(textMuted, -30) }}>Please check back later or contact them directly.</p>
         </div>
@@ -204,7 +204,7 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
         <div style={{ ...wrap, paddingTop: '80px' }}>
           <div style={{ marginBottom: '8px' }}>
             <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.18em', color: accent, marginBottom: '6px' }}>Step 1 of 4</div>
-            <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: '28px', fontWeight: 900, textTransform: 'uppercase', color: textColor, marginBottom: '4px' }}>What do you need?</h2>
+            <h2 style={{ fontFamily: tenantPublicChrome.fontDisplay, fontSize: '28px', fontWeight: 900, textTransform: 'uppercase', color: textColor, marginBottom: '4px' }}>What do you need?</h2>
             <p style={{ fontSize: '13px', color: textMuted }}>Select a service to get started</p>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '20px' }}>
@@ -213,7 +213,7 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
                 key={sv.id}
                 className="booking-service-btn"
                 onClick={() => { setSelService(sv); setStep('datetime') }}
-                style={{ background: bgCard, border: `1px solid ${bgBorder}`, borderRadius: '8px', padding: '16px 18px', textAlign: 'left', cursor: 'pointer', color: textColor, transition: 'border-color 0.15s', fontFamily: "'DM Sans', sans-serif" }}
+                style={{ background: bgCard, border: `1px solid ${bgBorder}`, borderRadius: '8px', padding: '16px 18px', textAlign: 'left', cursor: 'pointer', color: textColor, transition: 'border-color 0.15s', fontFamily: tenantPublicChrome.fontSans }}
               >
                 <div style={{ fontWeight: 600, fontSize: '15px', marginBottom: '4px', color: textColor }}>{sv.name}</div>
                 {sv.description && <div style={{ fontSize: '13px', color: textMuted, marginBottom: '8px' }}>{sv.description}</div>}
@@ -235,7 +235,7 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
           <button style={back} onClick={() => setStep('service')}>← Back</button>
           <div style={cardWrap}>
             <div style={cardHead}>
-              <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: '18px', fontWeight: 700, textTransform: 'uppercase', color: textColor }}>Choose a date & time</span>
+              <span style={{ fontFamily: tenantPublicChrome.fontDisplay, fontSize: '18px', fontWeight: 700, textTransform: 'uppercase', color: textColor }}>Choose a date & time</span>
               <span style={{ fontSize: '11px', color: textMuted, fontFamily: 'monospace' }}>Step 2 of 4</span>
             </div>
             <div style={cardBody}>
@@ -247,7 +247,7 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
                     <button
                       key={label}
                       onClick={() => { setSelDate(label); setSelTime('') }}
-                      style={{ padding: '8px 4px', border: `1.5px solid ${isSel ? brand : bgBorder}`, borderRadius: '6px', background: isSel ? brand : bgSurface, color: isSel ? bg : textColor, cursor: 'pointer', fontSize: '11px', fontFamily: "'DM Sans', sans-serif", transition: 'all 0.15s' }}
+                      style={{ padding: '8px 4px', border: `1.5px solid ${isSel ? brand : bgBorder}`, borderRadius: '6px', background: isSel ? brand : bgSurface, color: isSel ? bg : textColor, cursor: 'pointer', fontSize: '11px', fontFamily: tenantPublicChrome.fontSans, transition: 'all 0.15s' }}
                     >
                       <div style={{ fontSize: '9px', opacity: 0.7 }}>{'Su Mo Tu We Th Fr Sa'.split(' ')[d.getDay()]}</div>
                       <div style={{ fontSize: '14px', fontWeight: 600 }}>{d.getDate()}</div>
@@ -291,7 +291,7 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
           <button style={back} onClick={() => setStep('datetime')}>← Back</button>
           <div style={cardWrap}>
             <div style={cardHead}>
-              <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: '18px', fontWeight: 700, textTransform: 'uppercase', color: textColor }}>Your details</span>
+              <span style={{ fontFamily: tenantPublicChrome.fontDisplay, fontSize: '18px', fontWeight: 700, textTransform: 'uppercase', color: textColor }}>Your details</span>
               <span style={{ fontSize: '11px', color: textMuted, fontFamily: 'monospace' }}>Step 3 of 4</span>
             </div>
             <div style={{ ...cardBody, display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -342,7 +342,7 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
           <button style={back} onClick={() => setStep('details')}>← Back</button>
           <div style={cardWrap}>
             <div style={cardHead}>
-              <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: '18px', fontWeight: 700, textTransform: 'uppercase', color: textColor }}>Confirm booking</span>
+              <span style={{ fontFamily: tenantPublicChrome.fontDisplay, fontSize: '18px', fontWeight: 700, textTransform: 'uppercase', color: textColor }}>Confirm booking</span>
               <span style={{ fontSize: '11px', color: textMuted, fontFamily: 'monospace' }}>Step 4 of 4</span>
             </div>
             <div style={cardBody}>
@@ -400,7 +400,7 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
             <path d="M5 13l4 4L19 7" stroke={bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
-        <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: '28px', fontWeight: 900, textTransform: 'uppercase', color: brand, marginBottom: '10px' }}>Request received!</h2>
+        <h2 style={{ fontFamily: tenantPublicChrome.fontDisplay, fontSize: '28px', fontWeight: 900, textTransform: 'uppercase', color: brand, marginBottom: '10px' }}>Request received!</h2>
         <p style={{ color: textMuted, fontSize: '14px', lineHeight: 1.7, marginBottom: '6px' }}>
           {selService?.name} · {selDate} at {selTime}
         </p>

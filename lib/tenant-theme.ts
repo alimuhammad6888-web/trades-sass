@@ -15,17 +15,19 @@ type TenantThemeOptions = {
 }
 
 export const tenantPublicChrome = {
-  fontImport: "@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600&display=swap');",
+  fontDisplay: 'var(--font-barlow-condensed), sans-serif',
+  fontSans: 'var(--font-dm-sans), sans-serif',
   navHeight: '60px',
   navPadding: '0 40px',
   navPaddingMobile: '0 20px',
-  navLogoFontSize: '22px',
-  navLogoFontWeight: 900,
-  navLogoLetterSpacing: '0.05em',
   navButtonPadding: '8px 20px',
   navButtonFontSize: '14px',
   navButtonLetterSpacing: '0.1em',
 } as const
+
+export function getTenantBrandMarkCss(selector: string, color: string): string {
+  return `${selector} { font-family:${tenantPublicChrome.fontDisplay}; font-size:22px; font-weight:900; text-transform:uppercase; letter-spacing:0.05em; color:${color}; }`
+}
 
 export function adjustHex(hex: string, amount: number): string {
   const num = parseInt(hex.replace('#', ''), 16)
