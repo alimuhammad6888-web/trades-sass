@@ -125,8 +125,12 @@ export default async function LandingPage({ params }: { params: { slug: string }
         .nav-links { display:flex; align-items:center; gap:24px; }
         .nav-link { color:${textMuted}; font-size:13px; text-decoration:none; transition:color 0.15s; font-weight:500; }
         .nav-link:hover { color:${text}; }
+        .nav-contact { padding:${tenantPublicChrome.navButtonPadding}; border:1.5px solid ${bgBorder}; color:${textMuted}; font-family:${tenantPublicChrome.fontDisplay}; font-size:${tenantPublicChrome.navButtonFontSize}; font-weight:700; text-transform:uppercase; letter-spacing:${tenantPublicChrome.navButtonLetterSpacing}; text-decoration:none; transition:border-color 0.15s,color 0.15s; }
+        .nav-contact:hover { border-color:${accent}; color:${accent}; }
         .nav-book { padding:${tenantPublicChrome.navButtonPadding}; background:${brand}; color:${bg}; font-family:${tenantPublicChrome.fontDisplay}; font-size:${tenantPublicChrome.navButtonFontSize}; font-weight:700; text-transform:uppercase; letter-spacing:${tenantPublicChrome.navButtonLetterSpacing}; text-decoration:none; transition:opacity 0.15s; }
         .nav-book:hover { opacity:0.88; }
+        .hero-contact-link { display:inline-flex; align-items:center; padding:14px 28px; border:1.5px solid ${bgBorder}; color:${textMuted}; font-family:${tenantPublicChrome.fontDisplay}; font-size:18px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; text-decoration:none; transition:border-color 0.15s,color 0.15s; }
+        .hero-contact-link:hover { border-color:${accent}; color:${accent}; }
 
         .why-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:${bgBorder}; border:1px solid ${bgBorder}; border-radius:12px; overflow:hidden; }
         .why-card { background:${bgSurface}; padding:32px 28px; }
@@ -151,6 +155,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
         <div className="nav-links">
           <a href="#services" className="nav-link">Services</a>
           <a href="#why" className="nav-link">Why us</a>
+          <a href={`/contact/${slug}`} className="nav-contact">Contact us</a>
           <a href={settings?.phone ? `tel:${settings.phone.replace(/[^\d]/g,'')}` : '#'} className="nav-link">{settings?.phone || 'Contact us'}</a>
           <a href={`/book/${slug}`} className="nav-book">Book now</a>
         </div>
@@ -178,6 +183,7 @@ export default async function LandingPage({ params }: { params: { slug: string }
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill={bg}/></svg>
               {siteContent?.cta_primary_text || 'Book a service'}
             </a>
+            <a href={`/contact/${slug}`} className="hero-contact-link">Contact us</a>
             <a href={settings?.phone ? `tel:${settings.phone.replace(/[^\d]/g,'')}` : '#'} className="hero-phone-link" style={{ color:textMuted, fontSize:'14px', textDecoration:'none', letterSpacing:'0.05em', animation:'slide-up 0.8s ease 0.4s both' }}>
               {settings?.phone || 'Contact us'}
             </a>
@@ -275,6 +281,9 @@ export default async function LandingPage({ params }: { params: { slug: string }
           <div style={{ display:'flex', gap:'12px', justifyContent:'center', flexWrap:'wrap' }}>
             <a href={`/book/${slug}`} className="cta-book-link" style={{ display:'inline-flex', alignItems:'center', gap:'8px', padding:'14px 32px', background:bg, color:accent, fontFamily:tenantPublicChrome.fontDisplay, fontSize:'18px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', textDecoration:'none' }}>
               ⚡ {siteContent?.cta_primary_text || 'Book now'}
+            </a>
+            <a href={`/contact/${slug}`} style={{ display:'inline-flex', alignItems:'center', padding:'14px 32px', background:'transparent', color:bg, border:`2px solid ${bg}`, fontFamily:tenantPublicChrome.fontDisplay, fontSize:'18px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', textDecoration:'none' }}>
+              Contact us
             </a>
             <a href={settings?.phone ? `tel:${settings.phone.replace(/[^\d]/g,'')}` : '#'} style={{ display:'inline-flex', alignItems:'center', padding:'14px 32px', background:'transparent', color:bg, border:`2px solid ${bg}`, fontFamily:tenantPublicChrome.fontDisplay, fontSize:'18px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', textDecoration:'none' }}>
               {settings?.phone || 'Contact us'}
