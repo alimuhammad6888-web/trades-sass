@@ -179,7 +179,7 @@ export default function InboxPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [filter, setFilter] = useState<FilterKey>('All')
   const [saving, setSaving] = useState(false)
-  
+  //const inboxEnabled = false
   const inboxEnabled = tenant ? hasEntitledFeature(tenant, billing, 'advanced_crm') : false
   const isLocked = tenant !== null && !inboxEnabled
 
@@ -255,24 +255,50 @@ export default function InboxPage() {
     setConversations(prev => prev.map(c => (c.id === customerId ? { ...c, ...patch } : c)))
   }
 
+  async function runInboxAction(nextStatus: 'resolved' | 'waiting_customer') {
+    if (!tenant?.id || !selectedId || saving || isLocked) return false
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    if (!session?.access_token) {
+      setFetchError('Session expired. Please log in again.')
+      return false
+    }
+
+    const res = await fetch('/api/inbox/actions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        tenant_id: tenant.id,
+        customer_id: selectedId,
+        action: nextStatus === 'resolved' ? 'mark_resolved' : 'snooze',
+      }),
+    })
+
+    const data = await res.json().catch(() => null)
+
+    if (!res.ok) {
+      setFetchError(data?.error ?? 'Failed to update conversation. Please try again.')
+      return false
+    }
+
+    return true
+  }
+
   async function handleMarkResolved() {
     if (!selectedId || saving || isLocked) return
 
     setSaving(true)
     setFetchError(null)
 
-    const { error } = await supabase
-      .from('customers')
-      .update({
-        inbox_status: 'resolved',
-        inbox_last_action_at: new Date().toISOString(),
-        inbox_snoozed_until: null,
-      })
-      .eq('id', selectedId)
+    const ok = await runInboxAction('resolved')
 
-    if (error) {
-      console.error('[inbox] mark resolved error:', error.message)
-      setFetchError('Failed to update conversation. Please try again.')
+    if (!ok) {
       setSaving(false)
       return
     }
@@ -290,17 +316,9 @@ export default function InboxPage() {
     setSaving(true)
     setFetchError(null)
 
-    const { error } = await supabase
-      .from('customers')
-      .update({
-        inbox_status: 'waiting_customer',
-        inbox_last_action_at: new Date().toISOString(),
-      })
-      .eq('id', selectedId)
+    const ok = await runInboxAction('waiting_customer')
 
-    if (error) {
-      console.error('[inbox] snooze error:', error.message)
-      setFetchError('Failed to update conversation. Please try again.')
+    if (!ok) {
       setSaving(false)
       return
     }
