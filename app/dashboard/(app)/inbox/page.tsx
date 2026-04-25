@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type CSSProperties } from 'react'
 import { createClient } from '@supabase/supabase-js'
+import { hasEntitledFeature } from '@/lib/entitlements'
 import { useTenant } from '@/lib/tenant-context'
 import { useThemeTokens } from '@/lib/theme'
 
@@ -169,7 +170,7 @@ const shimmerStyle: CSSProperties = {
 }
 
 export default function InboxPage() {
-  const { tenant } = useTenant()
+  const { tenant, billing } = useTenant()
   const T = useThemeTokens()
 
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -178,8 +179,8 @@ export default function InboxPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [filter, setFilter] = useState<FilterKey>('All')
   const [saving, setSaving] = useState(false)
-
-  const inboxEnabled = tenant?.plan === 'pro' || tenant?.plan === 'enterprise'
+  
+  const inboxEnabled = tenant ? hasEntitledFeature(tenant, billing, 'advanced_crm') : false
   const isLocked = tenant !== null && !inboxEnabled
 
   useEffect(() => {

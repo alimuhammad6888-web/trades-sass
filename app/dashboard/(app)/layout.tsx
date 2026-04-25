@@ -5,6 +5,8 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
 import { TenantProvider } from '@/lib/tenant-context'
+import { type BillingRecord } from '@/lib/billing'
+import { hasEntitledFeature } from '@/lib/entitlements'
 import { type Tenant, DEFAULT_FEATURES } from '@/lib/tenant'
 import { hasFeature } from '@/lib/features'
 
@@ -30,6 +32,7 @@ export default function DashboardAppLayout({ children }: { children: React.React
   const pathname = usePathname()
 
   const [tenant, setTenant]           = useState<Tenant | null>(null)
+  const [billing, setBilling]         = useState<BillingRecord | null>(null)
   const [loading, setLoading]         = useState(true)
   const [collapsed, setCollapsed]     = useState(false)
   const [mobileOpen, setMobileOpen]   = useState(false)
@@ -78,11 +81,18 @@ export default function DashboardAppLayout({ children }: { children: React.React
         return
       }
 
-      const { data: tenantData } = await supabase
-        .from('tenants')
-        .select('id, name, slug, plan, business_settings(id, features, logo_url, dashboard_theme)')
-        .eq('id', userRow.tenant_id)
-        .single()
+      const [{ data: tenantData }, { data: billingData }] = await Promise.all([
+        supabase
+          .from('tenants')
+          .select('id, name, slug, plan, business_settings(id, features, logo_url, dashboard_theme)')
+          .eq('id', userRow.tenant_id)
+          .single(),
+        supabase
+          .from('tenant_billing')
+          .select('status, billing_enabled, admin_override, trial_ends_at, current_period_end')
+          .eq('tenant_id', userRow.tenant_id)
+          .maybeSingle(),
+      ])
 
       if (!mounted) return
       if (!tenantData) {
@@ -101,6 +111,7 @@ export default function DashboardAppLayout({ children }: { children: React.React
         plan:     tenantData.plan,
         features: { ...DEFAULT_FEATURES, ...(settings?.features ?? {}) },
       })
+      setBilling(billingData ?? null)
 
       if (settings?.logo_url) setLogoUrl(settings.logo_url)
       if (settings?.id) setSettingsId(settings.id)
@@ -181,7 +192,11 @@ export default function DashboardAppLayout({ children }: { children: React.React
             const locked = Boolean(
               item.feature &&
               tenant &&
-              !hasFeature(tenant, item.feature)
+              (
+                item.feature === 'advanced_crm'
+                  ? !hasEntitledFeature(tenant, billing, item.feature)
+                  : !hasFeature(tenant, item.feature)
+              )
             )
 
             const active = isActive(item.href)
@@ -298,7 +313,7 @@ export default function DashboardAppLayout({ children }: { children: React.React
   }
 
   return (
-    <TenantProvider tenant={tenant} loading={loading} theme={theme} setTheme={setTheme}>
+    <TenantProvider tenant={tenant} billing={billing} loading={loading} theme={theme} setTheme={setTheme}>
       <style suppressHydrationWarning>{`
         @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test:e2e": "playwright test",
+    "test:smoke": "node scripts/smoke-public-pages.mjs",
     "setup": "bash scripts/setup.sh",
     "mock": "node scripts/mock-services.js",
     "dev:full": "concurrently \"npm run mock\" \"npm run dev\"",
@@ -32,6 +34,7 @@
     "zod": "^3.23.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",

@@ -51,6 +51,28 @@ Or run both at once: `npm run dev:full`
 
 ---
 
+## Testing
+
+Start the app locally before running tests:
+
+```bash
+npm run dev
+```
+
+Run the Playwright end-to-end suite:
+
+```bash
+npm run test:e2e
+```
+
+Run the public page smoke checks:
+
+```bash
+npm run test:smoke
+```
+
+---
+
 ## Manual setup (if the script fails)
 
 ### Step 1 — Install dependencies
