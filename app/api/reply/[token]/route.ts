@@ -3,6 +3,7 @@ import { hasEntitledFeature } from '@/lib/entitlements'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { DEFAULT_FEATURES } from '@/lib/tenant'
 import { getTwilio } from '@/src/lib/services'
+import { canSendOutboundSms, recordOutboundAndMaybeWarn } from '@/src/lib/sms-limits'
 
 function bad(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status })
@@ -182,6 +183,22 @@ export async function POST(
   if (!fromPhone) return bad('Business phone is not configured.', 400)
   if (!toPhone) return bad('Customer phone is not configured.', 400)
 
+  const outboundState = await canSendOutboundSms({
+    tenantId: resolved.tokenRow.tenant_id,
+    plan: resolved.tenant.plan,
+  })
+
+  if (!outboundState.allowed) {
+    console.warn('[reply/token] outbound sms limit reached, blocking quick reply:', {
+      tenantId: resolved.tokenRow.tenant_id,
+      customerId: resolved.tokenRow.customer_id,
+      used: outboundState.used,
+      limit: outboundState.limit,
+      periodStart: outboundState.periodStart,
+    })
+    return bad('Monthly SMS limit reached for this account.', 429)
+  }
+
   let threadId = resolved.tokenRow.thread_id
 
   if (!threadId) {
@@ -235,6 +252,20 @@ export async function POST(
     console.error('[reply/token] inbox message insert failed:', messageErr)
     return bad('Failed to save reply.', 500)
   }
+
+  await recordOutboundAndMaybeWarn({
+    tenantId: resolved.tokenRow.tenant_id,
+    customerId: resolved.tokenRow.customer_id,
+    threadId,
+    plan: resolved.tenant.plan,
+    direction: 'outbound',
+    eventKind: 'quick_reply',
+    providerSid: (smsResult as any)?.sid ?? null,
+    fromPhone,
+    toPhone,
+    body,
+    segmentCount: 1,
+  })
 
   const nowIso = new Date().toISOString()
 

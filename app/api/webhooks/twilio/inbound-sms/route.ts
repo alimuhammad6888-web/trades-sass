@@ -4,6 +4,11 @@ import { hasEntitledFeature } from '@/lib/entitlements'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { DEFAULT_FEATURES } from '@/lib/tenant'
 import { getTwilio } from '@/src/lib/services'
+import {
+  canSendOutboundSms,
+  recordInboundSmsUsage,
+  recordOutboundAndMaybeWarn,
+} from '@/src/lib/sms-limits'
 import { verifyTwilioWebhook } from '@/src/lib/twilio-webhook'
 
 function ok() {
@@ -325,6 +330,17 @@ export async function POST(req: NextRequest) {
       toPhone: to,
     })
 
+    await recordInboundSmsUsage({
+      tenantId: resolved.tenantId,
+      customerId,
+      threadId,
+      providerSid: messageSid,
+      fromPhone: from,
+      toPhone: to,
+      body,
+      segmentCount: 1,
+    })
+
     const token = await createQuickReplyToken({
       tenantId: resolved.tenantId,
       customerId,
@@ -341,6 +357,21 @@ export async function POST(req: NextRequest) {
       replyUrl,
     })
 
+    const outboundState = await canSendOutboundSms({
+      tenantId: resolved.tenantId,
+      plan: resolved.tenant.plan,
+    })
+
+    if (!outboundState.allowed) {
+      console.warn('[twilio/inbound-sms] outbound sms limit reached, skipping owner notification:', {
+        tenantId: resolved.tenantId,
+        used: outboundState.used,
+        limit: outboundState.limit,
+        periodStart: outboundState.periodStart,
+      })
+      return ok()
+    }
+
     const twilio = getTwilio()
     const smsResult = await twilio.messages.create({
       to: ownerPhone,
@@ -349,6 +380,20 @@ export async function POST(req: NextRequest) {
     })
 
     console.log('[twilio/inbound-sms] owner notification result:', smsResult)
+
+    await recordOutboundAndMaybeWarn({
+      tenantId: resolved.tenantId,
+      customerId,
+      threadId,
+      plan: resolved.tenant.plan,
+      direction: 'outbound',
+      eventKind: 'owner_notification',
+      providerSid: (smsResult as any)?.sid ?? null,
+      fromPhone: to,
+      toPhone: ownerPhone,
+      body: ownerSms,
+      segmentCount: 1,
+    })
 
     const { error: customerUpdateErr } = await supabaseAdmin
       .from('customers')

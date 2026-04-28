@@ -3,6 +3,7 @@ import { hasEntitledFeature } from '@/lib/entitlements'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { DEFAULT_FEATURES } from '@/lib/tenant'
 import { getTwilio } from '@/src/lib/services'
+import { canSendOutboundSms, recordOutboundAndMaybeWarn } from '@/src/lib/sms-limits'
 import { verifyTwilioWebhook } from '@/src/lib/twilio-webhook'
 
 const MISSED_STATUSES = new Set(['no-answer', 'busy', 'failed', 'canceled'])
@@ -296,6 +297,21 @@ export async function POST(req: NextRequest) {
       toPhone: to,
     })
 
+    const outboundState = await canSendOutboundSms({
+      tenantId: resolved.tenantId,
+      plan: resolved.tenant.plan,
+    })
+
+    if (!outboundState.allowed) {
+      console.warn('[twilio/voice-status] outbound sms limit reached, skipping auto-reply:', {
+        tenantId: resolved.tenantId,
+        used: outboundState.used,
+        limit: outboundState.limit,
+        periodStart: outboundState.periodStart,
+      })
+      return ok()
+    }
+
     const twilio = getTwilio()
     const smsResult = await twilio.messages.create({
       to: from,
@@ -313,6 +329,20 @@ export async function POST(req: NextRequest) {
       body: autoReply,
       fromPhone: to,
       toPhone: from,
+    })
+
+    await recordOutboundAndMaybeWarn({
+      tenantId: resolved.tenantId,
+      customerId,
+      threadId,
+      plan: resolved.tenant.plan,
+      direction: 'outbound',
+      eventKind: 'missed_call_auto_reply',
+      providerSid: (smsResult as any)?.sid ?? null,
+      fromPhone: to,
+      toPhone: from,
+      body: autoReply,
+      segmentCount: 1,
     })
 
     const { error: customerUpdateErr } = await supabaseAdmin
