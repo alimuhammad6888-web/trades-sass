@@ -3,6 +3,7 @@ import { hasEntitledFeature } from '@/lib/entitlements'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { DEFAULT_FEATURES } from '@/lib/tenant'
 import { getTwilio } from '@/src/lib/services'
+import { verifyTwilioWebhook } from '@/src/lib/twilio-webhook'
 
 const MISSED_STATUSES = new Set(['no-answer', 'busy', 'failed', 'canceled'])
 
@@ -241,10 +242,18 @@ function makeAutoReply(settings: { missed_call_auto_reply: string | null }) {
 }
 
 export async function POST(req: NextRequest) {
-  // TODO: Verify Twilio signatures before production.
-
   try {
     const form = await req.formData()
+    const invalidSignature = verifyTwilioWebhook({
+      req,
+      formData: form,
+      pathname: '/api/webhooks/twilio/voice-status',
+    })
+
+    if (invalidSignature) {
+      return invalidSignature
+    }
+
     const to = normalizePhone(String(form.get('To') ?? ''))
     const from = normalizePhone(String(form.get('From') ?? ''))
     const callSid = String(form.get('CallSid') ?? '').trim()

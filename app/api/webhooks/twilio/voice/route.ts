@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { hasEntitledFeature } from '@/lib/entitlements'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { DEFAULT_FEATURES } from '@/lib/tenant'
+import { verifyTwilioWebhook } from '@/src/lib/twilio-webhook'
 
 function xml(body: string) {
   return new NextResponse(body, {
@@ -105,9 +106,17 @@ async function resolveTenantByBusinessNumber(to: string) {
 }
 
 export async function POST(req: NextRequest) {
-  // TODO: Verify Twilio signatures before production.
-
   const form = await req.formData()
+  const invalidSignature = verifyTwilioWebhook({
+    req,
+    formData: form,
+    pathname: '/api/webhooks/twilio/voice',
+  })
+
+  if (invalidSignature) {
+    return invalidSignature
+  }
+
   const to = normalizePhone(String(form.get('To') ?? ''))
   const from = normalizePhone(String(form.get('From') ?? ''))
 

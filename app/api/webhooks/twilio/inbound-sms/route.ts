@@ -4,6 +4,7 @@ import { hasEntitledFeature } from '@/lib/entitlements'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { DEFAULT_FEATURES } from '@/lib/tenant'
 import { getTwilio } from '@/src/lib/services'
+import { verifyTwilioWebhook } from '@/src/lib/twilio-webhook'
 
 function ok() {
   return new NextResponse('', { status: 200 })
@@ -270,10 +271,18 @@ function buildOwnerSms(params: {
 }
 
 export async function POST(req: NextRequest) {
-  // TODO: Verify Twilio signatures before production.
-
   try {
     const form = await req.formData()
+    const invalidSignature = verifyTwilioWebhook({
+      req,
+      formData: form,
+      pathname: '/api/webhooks/twilio/inbound-sms',
+    })
+
+    if (invalidSignature) {
+      return invalidSignature
+    }
+
     const from = normalizePhone(String(form.get('From') ?? ''))
     const to = normalizePhone(String(form.get('To') ?? ''))
     const body = String(form.get('Body') ?? '').trim()
