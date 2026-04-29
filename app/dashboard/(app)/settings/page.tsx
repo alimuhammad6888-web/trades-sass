@@ -102,6 +102,7 @@ export default function SettingsPage() {
   const [form, setForm] = useState({
     primary_color: '#F4C300', accent_color: '#1a1a1a', tagline: '',
     phone: '', email: '', address_line1: '', city: '', state: '',
+    google_review_url: '', yelp_review_url: '',
     border_radius: 'soft', font_style: 'sans', chatbot_greeting: '',
     booking_lead_time_hours: 2, booking_window_days: 60,
     auto_confirm_bookings: false,
@@ -176,6 +177,8 @@ export default function SettingsPage() {
           address_line1:            s.address_line1            ?? '',
           city:                     s.city                     ?? '',
           state:                    s.state                    ?? '',
+          google_review_url:        s.google_review_url        ?? '',
+          yelp_review_url:          s.yelp_review_url          ?? '',
           border_radius:            s.border_radius            ?? 'soft',
           font_style:               s.font_style               ?? 'sans',
           chatbot_greeting:         s.chatbot_greeting         ?? '',
@@ -382,27 +385,54 @@ export default function SettingsPage() {
 
             {/* ── CONTACT ── */}
             {tab === 'contact' && (
-              <div style={card}>
-                <div style={cardTitle}>Contact information</div>
-                <p style={{ fontSize:'13px', color:T.t3, marginBottom:'16px' }}>
-                  Shown to customers on the booking page and confirmation emails.
-                </p>
-                <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
-                  {[
-                    {key:'phone',        label:'Business phone', ph:'(555) 000-0000',          hint:'Shown on the booking page'},
-                    {key:'email',        label:'Business email', ph:'hello@yourbusiness.com',   hint:'Shown on the booking page and customer emails'},
-                    {key:'address_line1',label:'Address',        ph:'123 Main St',              hint:''},
-                    {key:'city',         label:'City',           ph:'Los Angeles',              hint:''},
-                    {key:'state',        label:'State',          ph:'CA',                       hint:''},
-                  ].map(field => (
-                    <div key={field.key}>
-                      <label style={lbl}>{field.label}</label>
-                      <input style={inp} value={(form as any)[field.key]} onChange={e => update(field.key, e.target.value)} placeholder={field.ph} />
-                      {field.hint && <div style={hint}>{field.hint}</div>}
-                    </div>
-                  ))}
+              <>
+                <div style={card}>
+                  <div style={cardTitle}>Contact information</div>
+                  <p style={{ fontSize:'13px', color:T.t3, marginBottom:'16px' }}>
+                    Shown to customers on the booking page and confirmation emails.
+                  </p>
+                  <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
+                    {[
+                      {key:'phone',        label:'Business phone', ph:'(555) 000-0000',          hint:'Shown on the booking page'},
+                      {key:'email',        label:'Business email', ph:'hello@yourbusiness.com',   hint:'Shown on the booking page and customer emails'},
+                      {key:'address_line1',label:'Address',        ph:'123 Main St',              hint:''},
+                      {key:'city',         label:'City',           ph:'Los Angeles',              hint:''},
+                      {key:'state',        label:'State',          ph:'CA',                       hint:''},
+                    ].map(field => (
+                      <div key={field.key}>
+                        <label style={lbl}>{field.label}</label>
+                        <input style={inp} value={(form as any)[field.key]} onChange={e => update(field.key, e.target.value)} placeholder={field.ph} />
+                        {field.hint && <div style={hint}>{field.hint}</div>}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+
+                <div style={card}>
+                  <div style={cardTitle}>Review links</div>
+                  <p style={{ fontSize:'13px', color:T.t3, marginBottom:'16px' }}>
+                    Used after positive customer feedback to send people to your public review pages.
+                  </p>
+                  <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
+                    {[
+                      { key:'google_review_url', label:'Google review URL', ph:'https://g.page/r/your-review-link/review', hint:'Shown to happy customers after they submit positive feedback.' },
+                      { key:'yelp_review_url',   label:'Yelp review URL',   ph:'https://www.yelp.com/writeareview/biz/your-business', hint:'Optional second review destination for positive customers.' },
+                    ].map(field => (
+                      <div key={field.key}>
+                        <label style={lbl}>{field.label}</label>
+                        <input
+                          style={inp}
+                          type="url"
+                          value={(form as any)[field.key]}
+                          onChange={e => update(field.key, e.target.value)}
+                          placeholder={field.ph}
+                        />
+                        <div style={hint}>{field.hint}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
 
             {/* ── NOTIFICATIONS ── */}
