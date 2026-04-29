@@ -108,12 +108,20 @@ export default function AdminPage() {
             <h1 style={{ fontFamily: 'Georgia,serif', fontSize: '22px', margin: 0, fontStyle: 'italic' }}>Tenants</h1>
             <p style={{ fontSize: '13px', color: T3, margin: '4px 0 0' }}>{tenants.length} total</p>
           </div>
-          <a href="/admin/tenants/new" style={{
-            padding: '10px 20px', background: Y, color: '#000', border: 'none', borderRadius: '6px',
-            fontSize: '13px', fontWeight: 700, textDecoration: 'none', fontFamily: 'sans-serif',
-          }}>
-            + New tenant
-          </a>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <a href="/admin/sms-limits" style={{
+              padding: '10px 20px', background: '#1a1a2e', color: '#c7d2fe', border: `1px solid ${BORDER}`, borderRadius: '6px',
+              fontSize: '13px', fontWeight: 700, textDecoration: 'none', fontFamily: 'sans-serif',
+            }}>
+              SMS Limits
+            </a>
+            <a href="/admin/tenants/new" style={{
+              padding: '10px 20px', background: Y, color: '#000', border: 'none', borderRadius: '6px',
+              fontSize: '13px', fontWeight: 700, textDecoration: 'none', fontFamily: 'sans-serif',
+            }}>
+              + New tenant
+            </a>
+          </div>
         </div>
 
         {/* Loading */}
