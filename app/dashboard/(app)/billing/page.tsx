@@ -25,6 +25,17 @@ type BillingRow = {
   cancel_at_period_end:   boolean
 }
 
+type SmsUsageData = {
+  plan: string
+  monthlyLimit: number
+  outboundUsed: number
+  inboundLogged: number
+  remaining: number
+  percentUsed: number
+  limitReached: boolean
+  periodStart: string
+}
+
 const PLAN_OPTIONS: { plan: Plan; label: string; description: string; price: string }[] = [
   {
     plan:        'starter',
@@ -113,6 +124,8 @@ export default function BillingPage() {
   const [openingPortal, setOpeningPortal] = useState(false)
   const [error, setError]             = useState<string | null>(null)
   const [checkoutResult, setCheckoutResult] = useState<string | null>(null)
+  const [smsUsage, setSmsUsage] = useState<SmsUsageData | null>(null)
+  const [smsUsageLoading, setSmsUsageLoading] = useState(true)
 
   useEffect(() => {
     const param = new URLSearchParams(window.location.search).get('checkout')
@@ -130,6 +143,42 @@ export default function BillingPage() {
         if (err) console.error('[billing page] fetch error:', err.message)
         setBilling(data ?? null)
         setLoading(false)
+      })
+  }, [tenant?.id])
+
+  useEffect(() => {
+    if (!tenant?.id) return
+
+    setSmsUsageLoading(true)
+
+    supabase.auth
+      .getSession()
+      .then(async ({ data: { session } }) => {
+        if (!session?.access_token) {
+          setSmsUsageLoading(false)
+          return
+        }
+
+        const res = await fetch('/api/billing/sms-usage', {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        })
+
+        const data = await res.json().catch(() => null)
+
+        if (!res.ok) {
+          console.error('[billing page] sms usage fetch error:', data?.error ?? 'Unknown error')
+          setSmsUsageLoading(false)
+          return
+        }
+
+        setSmsUsage(data)
+        setSmsUsageLoading(false)
+      })
+      .catch(err => {
+        console.error('[billing page] sms usage fetch error:', err)
+        setSmsUsageLoading(false)
       })
   }, [tenant?.id])
 
@@ -199,6 +248,21 @@ export default function BillingPage() {
 
   const paymentsEnabled = hasFeature(tenant, 'payments')
   const planLabel       = formatPlanLabel(tenant?.plan)
+  const smsCardTone =
+    !smsUsage ? 'neutral' :
+    smsUsage.percentUsed >= 100 ? 'critical' :
+    smsUsage.percentUsed >= 95 ? 'warning-strong' :
+    smsUsage.percentUsed >= 80 ? 'warning' :
+    'neutral'
+
+  const smsCardStyles =
+    smsCardTone === 'critical'
+      ? { border: '#5c1a1a', badgeBg: '#2a0d0d', badgeColor: '#f87171', textColor: '#f87171' }
+      : smsCardTone === 'warning-strong'
+        ? { border: '#5c4400', badgeBg: '#2a1f00', badgeColor: '#f59e0b', textColor: '#f59e0b' }
+        : smsCardTone === 'warning'
+          ? { border: '#5c4400', badgeBg: '#2a1f00', badgeColor: '#F4C300', textColor: '#F4C300' }
+          : { border: T.border, badgeBg: T.isDark ? '#1a1a1a' : '#f3f4f6', badgeColor: T.t3, textColor: T.t1 }
 
   return (
     <div style={{ minHeight: '100vh', background: T.bg, fontFamily: 'sans-serif', transition: 'background 0.2s' }}>
@@ -465,6 +529,73 @@ export default function BillingPage() {
             </div>
           </div>
         )}
+
+        <div
+          style={{
+            background: T.card,
+            border: `1px solid ${smsCardStyles.border}`,
+            borderRadius: '10px',
+            overflow: 'hidden',
+            marginBottom: '24px',
+          }}
+        >
+          <div
+            style={{
+              padding: '16px 20px',
+              borderBottom: `1px solid ${T.border}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+            }}
+          >
+            <span style={{ fontSize: '13px', fontWeight: 600, color: T.t1 }}>SMS usage</span>
+            {!smsUsageLoading && smsUsage && (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '4px 12px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  background: smsCardStyles.badgeBg,
+                  color: smsCardStyles.badgeColor,
+                }}
+              >
+                {smsUsage.percentUsed}%
+              </span>
+            )}
+          </div>
+
+          <div style={{ padding: '20px' }}>
+            {smsUsageLoading ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <SkeletonLine width="220px" height="18px" />
+                <SkeletonLine width="140px" height="14px" />
+              </div>
+            ) : !smsUsage ? (
+              <div style={{ fontSize: '13px', color: T.t3, lineHeight: 1.6 }}>
+                SMS usage is unavailable right now.
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: '16px', fontWeight: 700, color: smsCardStyles.textColor, marginBottom: '6px' }}>
+                  You've used {smsUsage.outboundUsed} of {smsUsage.monthlyLimit} outbound SMS this month.
+                </div>
+                <div style={{ fontSize: '12px', color: T.t3, lineHeight: 1.6, marginBottom: smsUsage.monthlyLimit === 0 ? '8px' : 0 }}>
+                  Inbound SMS logged: {smsUsage.inboundLogged}
+                </div>
+                {smsUsage.monthlyLimit === 0 && (
+                  <div style={{ fontSize: '12px', color: smsCardStyles.badgeColor, lineHeight: 1.6 }}>
+                    SMS sending is not included in this plan.
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
 
         {/* Back link */}
         <Link
