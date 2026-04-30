@@ -59,10 +59,33 @@ function BookingsInner() {
 
   async function updateStatus(id: string, status: string) {
     setUpdating(id)
-    await supabase.from('bookings').update({
-      status,
-      ...(status === 'confirmed' ? { confirmed_at: new Date().toISOString() } : {}),
-    }).eq('id', id)
+    const { data: { session } } = await supabase.auth.getSession()
+
+    if (!session?.access_token) {
+      setUpdating(null)
+      showToast('Session expired — please log in again.', false)
+      return
+    }
+
+    const res = await fetch('/api/bookings/status', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        bookingId: id,
+        status,
+      }),
+    })
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null)
+      setUpdating(null)
+      showToast(data?.error ?? 'Failed to update booking.', false)
+      return
+    }
+
     await loadBookings()
     setUpdating(null)
     if (status === 'confirmed') showToast('✓ Booking confirmed!', true)
