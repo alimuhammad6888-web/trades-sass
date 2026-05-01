@@ -9,25 +9,16 @@ import {
   recordInboundSmsUsage,
   recordOutboundAndMaybeWarn,
 } from '@/src/lib/sms-limits'
+import {
+  buildCustomerUpdatePayload,
+  matchCustomerRows,
+  normalizeCustomerIdentity,
+  normalizePhone,
+} from '@/src/lib/customer-normalization'
 import { verifyTwilioWebhook } from '@/src/lib/twilio-webhook'
 
 function ok() {
   return new NextResponse('', { status: 200 })
-}
-
-function normalizePhone(input: string | null | undefined): string | null {
-  if (!input) return null
-  const trimmed = input.trim()
-  if (!trimmed) return null
-
-  const hasPlus = trimmed.startsWith('+')
-  const digits = trimmed.replace(/\D/g, '')
-
-  if (!digits) return null
-  if (hasPlus) return `+${digits}`
-  if (digits.length === 10) return `+1${digits}`
-  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`
-  return `+${digits}`
 }
 
 async function resolveTenantByBusinessNumber(to: string) {
@@ -120,27 +111,64 @@ async function ensureWebhookEvent(
 }
 
 async function findOrCreateCustomer(tenantId: string, phone: string) {
-  const { data: existing, error: existingErr } = await supabaseAdmin
+  const identity = normalizeCustomerIdentity({
+    firstName: 'Caller',
+    lastName: phone,
+    phone,
+  })
+
+  const { data: customerRows, error: existingErr } = await supabaseAdmin
     .from('customers')
-    .select('id, phone')
+    .select('id, first_name, last_name, email, phone, created_at')
     .eq('tenant_id', tenantId)
-    .eq('phone', phone)
-    .maybeSingle()
+    .or('phone.not.is.null,email.not.is.null')
 
   if (existingErr) {
     console.error('[twilio/inbound-sms] customer lookup failed:', existingErr.message)
     throw existingErr
   }
 
-  if (existing?.id) return existing.id
+  const match = matchCustomerRows(customerRows ?? [], identity)
+
+  if (match.hadIdentityConflict) {
+    console.warn('[twilio/inbound-sms] customer identity warning:', {
+      type: 'identity_conflict',
+      tenantId,
+    })
+  }
+
+  if (match.hadMultiplePhoneMatches || match.hadMultipleEmailMatches) {
+    console.warn('[twilio/inbound-sms] customer identity warning:', {
+      type: 'multiple_customer_matches',
+      tenantId,
+    })
+  }
+
+  if (match.customer?.id) {
+    const updatePayload = buildCustomerUpdatePayload(match.customer, identity)
+
+    if (Object.keys(updatePayload).length > 0) {
+      const { error: updateErr } = await supabaseAdmin
+        .from('customers')
+        .update(updatePayload)
+        .eq('id', match.customer.id)
+
+      if (updateErr) {
+        console.error('[twilio/inbound-sms] customer update failed:', updateErr.message)
+        throw updateErr
+      }
+    }
+
+    return match.customer.id
+  }
 
   const { data: created, error: createErr } = await supabaseAdmin
     .from('customers')
     .insert({
       tenant_id: tenantId,
       first_name: 'Caller',
-      last_name: phone,
-      phone,
+      last_name: identity.lastName,
+      phone: identity.normalizedPhone,
     })
     .select('id')
     .single()

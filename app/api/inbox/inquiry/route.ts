@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import {
+  buildCustomerUpdatePayload,
+  matchCustomerRows,
+  normalizeCustomerIdentity,
+} from '@/src/lib/customer-normalization'
 
 type InquiryBody = {
   slug?: string
@@ -22,7 +27,7 @@ export async function POST(req: NextRequest) {
     const firstName = body.first_name?.trim()
     const lastName = body.last_name?.trim()
     const phone = body.phone?.trim()
-    const email = body.email?.trim().toLowerCase()
+    const email = body.email?.trim()
     const message = body.message?.trim()
 
     if (!slug) return bad('Missing slug.')
@@ -44,57 +49,55 @@ export async function POST(req: NextRequest) {
 
     const tenantId = tenant.id
 
-    // Match customer by phone first
+    const identity = normalizeCustomerIdentity({
+      firstName,
+      lastName,
+      phone,
+      email,
+    })
+
     let customerId: string | null = null
 
-    const { data: phoneMatch } = await supabaseAdmin
+    const { data: customerRows, error: lookupError } = await supabaseAdmin
       .from('customers')
-      .select('id')
+      .select('id, first_name, last_name, email, phone, created_at')
       .eq('tenant_id', tenantId)
-      .eq('phone', phone)
-      .maybeSingle()
+      .or('phone.not.is.null,email.not.is.null')
 
-    if (phoneMatch?.id) {
-      customerId = phoneMatch.id
+    if (lookupError) {
+      console.error('[inquiry] customer lookup failed:', lookupError)
+      return bad('Failed to look up customer.', 500)
+    }
 
-      const { error: updateError } = await supabaseAdmin
-        .from('customers')
-        .update({
-          first_name: firstName,
-          last_name: lastName,
-          email,
-          phone,
-        })
-        .eq('id', customerId)
+    const match = matchCustomerRows(customerRows ?? [], identity)
 
-      if (updateError) {
-        console.error('[inquiry] customer update by phone failed:', updateError)
-        return bad('Failed to update customer.', 500)
-      }
-    } else {
-      // Fallback to email
-      const { data: emailMatch } = await supabaseAdmin
-        .from('customers')
-        .select('id')
-        .eq('tenant_id', tenantId)
-        .eq('email', email)
-        .maybeSingle()
+    if (match.hadIdentityConflict) {
+      console.warn('[inquiry] customer identity warning:', {
+        type: 'identity_conflict',
+        tenantId,
+      })
+    }
 
-      if (emailMatch?.id) {
-        customerId = emailMatch.id
+    if (match.hadMultiplePhoneMatches || match.hadMultipleEmailMatches) {
+      console.warn('[inquiry] customer identity warning:', {
+        type: 'multiple_customer_matches',
+        tenantId,
+      })
+    }
 
+    if (match.customer?.id) {
+      customerId = match.customer.id
+
+      const updatePayload = buildCustomerUpdatePayload(match.customer, identity)
+
+      if (Object.keys(updatePayload).length > 0) {
         const { error: updateError } = await supabaseAdmin
           .from('customers')
-          .update({
-            first_name: firstName,
-            last_name: lastName,
-            email,
-            phone,
-          })
+          .update(updatePayload)
           .eq('id', customerId)
 
         if (updateError) {
-          console.error('[inquiry] customer update by email failed:', updateError)
+          console.error('[inquiry] customer update failed:', updateError)
           return bad('Failed to update customer.', 500)
         }
       }
@@ -106,10 +109,10 @@ export async function POST(req: NextRequest) {
         .from('customers')
         .insert({
           tenant_id: tenantId,
-          first_name: firstName,
-          last_name: lastName,
-          email,
-          phone,
+          first_name: identity.firstName!,
+          last_name: identity.lastName,
+          email: identity.normalizedEmail,
+          phone: identity.normalizedPhone,
         })
         .select('id')
         .single()

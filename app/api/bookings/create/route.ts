@@ -2,15 +2,16 @@
 // Server-side booking creation — validates tenant, service, upserts customer, creates booking.
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import {
+  buildCustomerUpdatePayload,
+  matchCustomerRows,
+  normalizeCustomerIdentity,
+} from '@/src/lib/customer-normalization'
 
 const ALLOWED_TIMES = [
   '08:00','09:00','10:00','11:00',
   '13:00','14:00','15:00','16:00',
 ]
-
-function normalizePhone(raw: string): string {
-  return raw.replace(/\D/g, '')
-}
 
 export async function POST(req: NextRequest) {
   const supabase = createClient(
@@ -126,38 +127,62 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'This time slot is no longer available. Please choose another.' }, { status: 409 })
     }
 
-    // ── 11. Normalize phone and upsert customer ───────────────────
-    const cleanPhone = normalizePhone(phone)
+    // ── 11. Normalize identity and upsert customer ────────────────
+    const identity = normalizeCustomerIdentity({
+      firstName: first_name,
+      lastName: last_name,
+      email,
+      phone,
+    })
 
-    const { data: existing, error: lookupErr } = await supabase
+    const { data: customerRows, error: lookupErr } = await supabase
       .from('customers')
-      .select('id')
+      .select('id, first_name, last_name, email, phone, created_at')
       .eq('tenant_id', tenantId)
-      .eq('phone', cleanPhone)
-      .maybeSingle()
+      .or('phone.not.is.null,email.not.is.null')
 
     if (lookupErr) {
       console.error('[bookings/create] customer lookup failed:', lookupErr)
       return NextResponse.json({ error: 'Failed to look up customer' }, { status: 500 })
     }
 
+    const match = matchCustomerRows(customerRows ?? [], identity)
+
+    if (match.hadIdentityConflict) {
+      console.warn('[bookings/create] customer identity warning:', {
+        type: 'identity_conflict',
+        tenantId,
+      })
+    }
+
+    if (match.hadMultiplePhoneMatches || match.hadMultipleEmailMatches) {
+      console.warn('[bookings/create] customer identity warning:', {
+        type: 'multiple_customer_matches',
+        tenantId,
+      })
+    }
+
     let customerId: string
 
-    if (existing) {
-      customerId = existing.id
-      await supabase
-        .from('customers')
-        .update({ first_name: first_name.trim(), last_name: last_name.trim(), email: email.trim() })
-        .eq('id', existing.id)
+    if (match.customer) {
+      customerId = match.customer.id
+      const updatePayload = buildCustomerUpdatePayload(match.customer, identity)
+
+      if (Object.keys(updatePayload).length > 0) {
+        await supabase
+          .from('customers')
+          .update(updatePayload)
+          .eq('id', match.customer.id)
+      }
     } else {
       const { data: newCustomer, error: insertErr } = await supabase
         .from('customers')
         .insert({
           tenant_id: tenantId,
-          first_name: first_name.trim(),
-          last_name: last_name.trim(),
-          phone: cleanPhone,
-          email: email.trim(),
+          first_name: identity.firstName!,
+          last_name: identity.lastName,
+          phone: identity.normalizedPhone,
+          email: identity.normalizedEmail,
           lead_source: 'website',
         })
         .select('id')
