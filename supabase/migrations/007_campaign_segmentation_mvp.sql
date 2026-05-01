@@ -1,12 +1,10 @@
--- ============================================================
--- 007_campaign_segmentation_mvp.sql
--- Campaign segmentation MVP: audience filters on campaigns.
--- ============================================================
-
 begin;
 
 alter table public.campaigns
   add column if not exists audience_filters jsonb;
+
+alter table public.campaigns
+  drop constraint if exists campaigns_audience_type_check;
 
 update public.campaigns
 set audience_type = 'all_eligible'
@@ -18,9 +16,6 @@ where audience_filters is null;
 
 alter table public.campaigns
   alter column audience_type set default 'all_eligible';
-
-alter table public.campaigns
-  drop constraint if exists campaigns_audience_type_check;
 
 alter table public.campaigns
   add constraint campaigns_audience_type_check
