@@ -73,6 +73,7 @@ export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null)
@@ -200,6 +201,101 @@ export default function CampaignsPage() {
 
     setSuccess('Draft saved.')
     setSaving(false)
+  }
+
+  async function sendCampaign() {
+    if (!selectedCampaignId) {
+      setError('Save draft before sending.')
+      return
+    }
+
+    const confirmed = window.confirm(
+      'Send this campaign now? This will email eligible customers individually.'
+    )
+
+    if (!confirmed) return
+
+    setSending(true)
+    setError(null)
+    setSuccess(null)
+
+    const { data: { session } } = await supabase.auth.getSession()
+
+    if (!session?.access_token) {
+      setError('Session expired — please log in again.')
+      setSending(false)
+      return
+    }
+
+    const res = await fetch('/api/campaigns/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        campaignId: selectedCampaignId,
+      }),
+    })
+
+    const data = await res.json().catch(() => null)
+
+    if (!res.ok) {
+      setError(data?.error ?? 'Failed to send campaign.')
+      setSending(false)
+      return
+    }
+
+    await loadCampaigns()
+    setStepIndex(3)
+    setSuccess(
+      `Campaign sent to ${data?.recipientCount ?? 0} customers. ${data?.deliveredCount ?? 0} delivered, ${data?.failedCount ?? 0} failed.`
+    )
+    setSending(false)
+  }
+
+  async function deleteCampaign(campaignId: string) {
+    const confirmed = window.confirm('Delete this campaign? This cannot be undone.')
+
+    if (!confirmed) return
+
+    setError(null)
+    setSuccess(null)
+
+    const { data: { session } } = await supabase.auth.getSession()
+
+    if (!session?.access_token) {
+      setError('Session expired — please log in again.')
+      return
+    }
+
+    const res = await fetch('/api/campaigns', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        campaignId,
+      }),
+    })
+
+    const data = await res.json().catch(() => null)
+
+    if (!res.ok) {
+      setError(data?.error ?? 'Failed to delete campaign.')
+      return
+    }
+
+    setCampaigns(current => current.filter(campaign => campaign.id !== campaignId))
+
+    if (selectedCampaignId === campaignId) {
+      setSelectedCampaignId(null)
+      setDraft(EMPTY_DRAFT)
+      setStepIndex(0)
+    }
+
+    setSuccess('Campaign deleted.')
   }
 
   const reviewCtaVisible = Boolean(draft.cta_url.trim())
@@ -442,6 +538,28 @@ export default function CampaignsPage() {
                       <div style={{ fontSize: '11px', color: T.t3 }}>
                         Created {formatDate(campaign.created_at)}
                         {campaign.sent_at ? ` • Sent ${formatDate(campaign.sent_at)}` : ''}
+                      </div>
+
+                      <div style={{ marginTop: '12px' }}>
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation()
+                            deleteCampaign(campaign.id)
+                          }}
+                          style={{
+                            padding: '6px 10px',
+                            borderRadius: '6px',
+                            border: `1px solid ${T.border}`,
+                            background: T.card,
+                            color: '#f87171',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Delete
+                        </button>
                       </div>
                     </button>
                   )
@@ -748,6 +866,22 @@ export default function CampaignsPage() {
                       </div>
                     )}
 
+                    {selectedCampaign && selectedCampaign.status !== 'draft' && (
+                      <div
+                        style={{
+                          background: T.isDark ? '#2a1f00' : '#fff8e1',
+                          border: `1px solid ${T.isDark ? '#5c4400' : '#f3d27a'}`,
+                          borderRadius: '8px',
+                          padding: '12px 14px',
+                          color: '#F4C300',
+                          fontSize: '12px',
+                          lineHeight: 1.6,
+                        }}
+                      >
+                        Only draft campaigns can be sent.
+                      </div>
+                    )}
+
                     {!canSendCampaigns ? (
                       <div
                         style={{
@@ -805,16 +939,17 @@ export default function CampaignsPage() {
                       >
                         <div>
                           <div style={{ fontSize: '13px', fontWeight: 700, color: T.t1, marginBottom: '4px' }}>
-                            Send flow comes next.
+                            Ready to send.
                           </div>
                           <div style={{ fontSize: '12px', color: T.t3, lineHeight: 1.6 }}>
-                            The campaign builder is ready. Actual sending and recipient resolution will be wired in the next step.
+                            This will send the campaign individually to each eligible customer.
                           </div>
                         </div>
 
                         <button
                           type="button"
-                          disabled
+                          onClick={sendCampaign}
+                          disabled={!selectedCampaignId || sending || selectedCampaign?.status !== 'draft'}
                           style={{
                             padding: '8px 14px',
                             borderRadius: '6px',
@@ -823,11 +958,48 @@ export default function CampaignsPage() {
                             color: '#000',
                             fontSize: '12px',
                             fontWeight: 700,
-                            opacity: 0.55,
-                            cursor: 'not-allowed',
+                            opacity: !selectedCampaignId || sending || selectedCampaign?.status !== 'draft' ? 0.55 : 1,
+                            cursor: !selectedCampaignId || sending || selectedCampaign?.status !== 'draft' ? 'not-allowed' : 'pointer',
                           }}
                         >
-                          Send coming next
+                          {sending ? 'Sending...' : 'Send campaign'}
+                        </button>
+                      </div>
+                    )}
+
+                    {canSendCampaigns && !selectedCampaignId && (
+                      <div
+                        style={{
+                          background: T.isDark ? '#2a1f00' : '#fff8e1',
+                          border: `1px solid ${T.isDark ? '#5c4400' : '#f3d27a'}`,
+                          borderRadius: '8px',
+                          padding: '12px 14px',
+                          color: '#F4C300',
+                          fontSize: '12px',
+                          lineHeight: 1.6,
+                        }}
+                      >
+                        Save draft before sending.
+                      </div>
+                    )}
+
+                    {selectedCampaign && (
+                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <button
+                          type="button"
+                          onClick={() => deleteCampaign(selectedCampaign.id)}
+                          style={{
+                            padding: '8px 14px',
+                            borderRadius: '6px',
+                            border: `1px solid ${T.border}`,
+                            background: T.card,
+                            color: '#f87171',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Delete campaign
                         </button>
                       </div>
                     )}

@@ -121,6 +121,10 @@ export async function POST(req: NextRequest) {
     .from('campaigns')
     .insert({
       tenant_id: auth.tenantId,
+      title: name,
+      body: messageBody,
+      email_subject: subject,
+      channels: ['email'],
       name,
       channel: 'email',
       status: 'draft',
@@ -150,9 +154,60 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error || !data) {
-    console.error('[campaigns][POST] failed to create campaign:', error?.message)
+    console.error('[campaigns][POST] failed to create campaign:', {
+      message: error?.message,
+      details: error?.details,
+      hint: error?.hint,
+      code: error?.code,
+    })
     return bad('Failed to create campaign draft.', 500)
   }
 
   return NextResponse.json({ campaign: data }, { status: 201 })
+}
+
+export async function DELETE(req: NextRequest) {
+  const auth = await getAuthedTenant(req)
+  if (auth.error) return auth.error
+
+  const payload = (await req.json().catch(() => null)) as { campaignId?: string } | null
+  const campaignId = payload?.campaignId?.trim()
+
+  if (!campaignId) {
+    return bad('campaignId is required.', 400)
+  }
+
+  const { data: campaign, error: campaignErr } = await supabaseAdmin
+    .from('campaigns')
+    .select('id')
+    .eq('id', campaignId)
+    .eq('tenant_id', auth.tenantId)
+    .maybeSingle()
+
+  if (campaignErr) {
+    console.error('[campaigns][DELETE] failed to load campaign:', campaignErr.message)
+    return bad('Failed to load campaign.', 500)
+  }
+
+  if (!campaign) {
+    return bad('Campaign not found.', 404)
+  }
+
+  const { error } = await supabaseAdmin
+    .from('campaigns')
+    .delete()
+    .eq('id', campaignId)
+    .eq('tenant_id', auth.tenantId)
+
+  if (error) {
+    console.error('[campaigns][DELETE] failed to delete campaign:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    })
+    return bad('Failed to delete campaign.', 500)
+  }
+
+  return NextResponse.json({ success: true })
 }
