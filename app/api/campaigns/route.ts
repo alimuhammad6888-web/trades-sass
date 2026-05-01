@@ -10,6 +10,73 @@ type CreateCampaignBody = {
   cta_url?: string
   cta_label?: string
   audience_type?: string
+  audience_filters?: Record<string, unknown> | null
+}
+
+const VALID_AUDIENCE_TYPES = new Set([
+  'all_eligible',
+  'has_email',
+  'has_phone',
+  'booked_within',
+  'not_booked_since',
+  'created_within',
+])
+
+function isValidDateOnly(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+}
+
+function validateAudience(
+  audienceType: string,
+  audienceFilters: Record<string, unknown> | null
+): { ok: true; audienceFilters: Record<string, unknown> } | { ok: false; message: string } {
+  if (!VALID_AUDIENCE_TYPES.has(audienceType)) {
+    return { ok: false, message: 'Invalid audience type.' }
+  }
+
+  const safeFilters = audienceFilters && typeof audienceFilters === 'object' ? audienceFilters : {}
+  const startDate = safeFilters['startDate']
+  const endDate = safeFilters['endDate']
+  const sinceDate = safeFilters['sinceDate']
+
+  if (audienceType === 'all_eligible' || audienceType === 'has_email' || audienceType === 'has_phone') {
+    if (startDate !== undefined || endDate !== undefined || sinceDate !== undefined) {
+      return { ok: false, message: `No date filters are allowed for ${audienceType}.` }
+    }
+
+    return { ok: true, audienceFilters: { type: audienceType } }
+  }
+
+  if (audienceType === 'booked_within' || audienceType === 'created_within') {
+    if (!isValidDateOnly(startDate) || !isValidDateOnly(endDate)) {
+      return { ok: false, message: `${audienceType} requires startDate and endDate.` }
+    }
+
+    return {
+      ok: true,
+      audienceFilters: {
+        type: audienceType,
+        startDate,
+        endDate,
+      },
+    }
+  }
+
+  if (audienceType === 'not_booked_since') {
+    if (!isValidDateOnly(sinceDate)) {
+      return { ok: false, message: 'not_booked_since requires sinceDate.' }
+    }
+
+    return {
+      ok: true,
+      audienceFilters: {
+        type: audienceType,
+        sinceDate,
+      },
+    }
+  }
+
+  return { ok: false, message: 'Invalid audience configuration.' }
 }
 
 function bad(message: string, status = 400) {
@@ -79,6 +146,8 @@ export async function GET(req: NextRequest) {
       message_body,
       cta_url,
       cta_label,
+      audience_type,
+      audience_filters,
       recipient_count,
       delivered_count,
       clicked_count,
@@ -109,13 +178,21 @@ export async function POST(req: NextRequest) {
   const messageBody = payload?.message_body?.trim()
   const ctaUrl = payload?.cta_url?.trim() || null
   const ctaLabel = payload?.cta_label?.trim() || null
-  const audienceType = payload?.audience_type?.trim() || 'all_customers'
+  const audienceType = payload?.audience_type?.trim() || 'all_eligible'
+  const audienceFiltersInput =
+    payload?.audience_filters && typeof payload.audience_filters === 'object'
+      ? payload.audience_filters
+      : null
 
   if (!name) return bad('Campaign name is required.', 400)
   if (channel !== 'email') return bad('Only email campaigns are available in this MVP.', 400)
   if (!subject) return bad('Email subject is required.', 400)
   if (!messageBody) return bad('Message body is required.', 400)
-  if (audienceType !== 'all_customers') return bad('Only all_customers audience is supported.', 400)
+
+  const validatedAudience = validateAudience(audienceType, audienceFiltersInput)
+  if (validatedAudience.ok === false) {
+    return bad(validatedAudience.message, 400)
+  }
 
   const { data, error } = await supabaseAdmin
     .from('campaigns')
@@ -130,7 +207,8 @@ export async function POST(req: NextRequest) {
       status: 'draft',
       subject,
       message_body: messageBody,
-      audience_type: 'all_customers',
+      audience_type: audienceType,
+      audience_filters: validatedAudience.audienceFilters,
       cta_url: ctaUrl,
       cta_label: ctaLabel,
       created_by_user_id: auth.userId,
@@ -144,6 +222,8 @@ export async function POST(req: NextRequest) {
       message_body,
       cta_url,
       cta_label,
+      audience_type,
+      audience_filters,
       recipient_count,
       delivered_count,
       clicked_count,

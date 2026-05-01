@@ -21,12 +21,29 @@ type CampaignRow = {
   message_body: string
   cta_url: string | null
   cta_label: string | null
+  audience_type: AudienceType
+  audience_filters: AudienceFilters
   recipient_count: number
   delivered_count: number
   clicked_count: number
   failed_count: number
   created_at: string
   sent_at: string | null
+}
+
+type AudienceType =
+  | 'all_eligible'
+  | 'has_email'
+  | 'has_phone'
+  | 'booked_within'
+  | 'not_booked_since'
+  | 'created_within'
+
+type AudienceFilters = {
+  type: AudienceType
+  startDate?: string
+  endDate?: string
+  sinceDate?: string
 }
 
 type BuilderDraft = {
@@ -36,6 +53,8 @@ type BuilderDraft = {
   message_body: string
   cta_url: string
   cta_label: string
+  audience_type: AudienceType
+  audience_filters: AudienceFilters
 }
 
 const EMPTY_DRAFT: BuilderDraft = {
@@ -45,6 +64,8 @@ const EMPTY_DRAFT: BuilderDraft = {
   message_body: '',
   cta_url: '',
   cta_label: '',
+  audience_type: 'all_eligible',
+  audience_filters: { type: 'all_eligible' },
 }
 
 const STEPS = ['Channel', 'Message', 'Audience', 'Review'] as const
@@ -64,6 +85,106 @@ function getStatusStyles(status: CampaignRow['status']) {
   if (status === 'sending') return { bg: '#2a1f00', color: '#F4C300' }
   if (status === 'scheduled') return { bg: '#1c2232', color: '#93c5fd' }
   return { bg: '#1a1a1a', color: '#cccccc' }
+}
+
+const AUDIENCE_OPTIONS: Array<{ value: AudienceType; label: string }> = [
+  { value: 'all_eligible', label: 'All eligible customers' },
+  { value: 'has_email', label: 'Has email' },
+  { value: 'has_phone', label: 'Has phone' },
+  { value: 'booked_within', label: 'Booked within date range' },
+  { value: 'not_booked_since', label: 'Has not booked since date' },
+  { value: 'created_within', label: 'Created within date range' },
+]
+
+function getDefaultAudienceFilters(type: AudienceType): AudienceFilters {
+  if (type === 'booked_within' || type === 'created_within') {
+    return {
+      type,
+      startDate: '',
+      endDate: '',
+    }
+  }
+
+  if (type === 'not_booked_since') {
+    return {
+      type,
+      sinceDate: '',
+    }
+  }
+
+  return { type }
+}
+
+function normalizeAudienceType(value: unknown): AudienceType {
+  return AUDIENCE_OPTIONS.some(option => option.value === value)
+    ? (value as AudienceType)
+    : 'all_eligible'
+}
+
+function normalizeAudienceFilters(
+  audienceType: AudienceType,
+  filters: unknown
+): AudienceFilters {
+  const source = filters && typeof filters === 'object' ? (filters as Record<string, unknown>) : {}
+
+  if (audienceType === 'booked_within' || audienceType === 'created_within') {
+    return {
+      type: audienceType,
+      startDate: typeof source.startDate === 'string' ? source.startDate : '',
+      endDate: typeof source.endDate === 'string' ? source.endDate : '',
+    }
+  }
+
+  if (audienceType === 'not_booked_since') {
+    return {
+      type: audienceType,
+      sinceDate: typeof source.sinceDate === 'string' ? source.sinceDate : '',
+    }
+  }
+
+  return { type: audienceType }
+}
+
+function formatAudienceDate(value: string | undefined) {
+  if (!value) return '—'
+  const parsed = new Date(`${value}T00:00:00`)
+  if (Number.isNaN(parsed.getTime())) return value
+  return parsed.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+function getAudienceSummary(draft: BuilderDraft) {
+  const type = draft.audience_type
+
+  if (type === 'booked_within') {
+    return {
+      label: 'Booked within date range',
+      detail: `${formatAudienceDate(draft.audience_filters.startDate)} – ${formatAudienceDate(draft.audience_filters.endDate)}`,
+    }
+  }
+
+  if (type === 'not_booked_since') {
+    return {
+      label: 'Has not booked since date',
+      detail: formatAudienceDate(draft.audience_filters.sinceDate),
+    }
+  }
+
+  if (type === 'created_within') {
+    return {
+      label: 'Created within date range',
+      detail: `${formatAudienceDate(draft.audience_filters.startDate)} – ${formatAudienceDate(draft.audience_filters.endDate)}`,
+    }
+  }
+
+  const option = AUDIENCE_OPTIONS.find(item => item.value === type)
+  return {
+    label: option?.label ?? 'All eligible customers',
+    detail: null,
+  }
 }
 
 export default function CampaignsPage() {
@@ -132,11 +253,35 @@ export default function CampaignsPage() {
       message_body: selectedCampaign.message_body ?? '',
       cta_url: selectedCampaign.cta_url ?? '',
       cta_label: selectedCampaign.cta_label ?? '',
+      audience_type: normalizeAudienceType(selectedCampaign.audience_type),
+      audience_filters: normalizeAudienceFilters(
+        normalizeAudienceType(selectedCampaign.audience_type),
+        selectedCampaign.audience_filters
+      ),
     })
   }, [selectedCampaignId])
 
   function updateDraft<K extends keyof BuilderDraft>(key: K, value: BuilderDraft[K]) {
     setDraft(current => ({ ...current, [key]: value }))
+  }
+
+  function updateAudienceType(value: AudienceType) {
+    setDraft(current => ({
+      ...current,
+      audience_type: value,
+      audience_filters: getDefaultAudienceFilters(value),
+    }))
+  }
+
+  function updateAudienceFilters(next: Partial<AudienceFilters>) {
+    setDraft(current => ({
+      ...current,
+      audience_filters: {
+        ...current.audience_filters,
+        ...next,
+        type: current.audience_type,
+      },
+    }))
   }
 
   function startNewCampaign() {
@@ -173,7 +318,8 @@ export default function CampaignsPage() {
         message_body: draft.message_body,
         cta_url: draft.cta_url || undefined,
         cta_label: draft.cta_label || undefined,
-        audience_type: 'all_customers',
+        audience_type: draft.audience_type,
+        audience_filters: draft.audience_filters,
       }),
     })
 
@@ -196,6 +342,11 @@ export default function CampaignsPage() {
         message_body: created.message_body,
         cta_url: created.cta_url ?? '',
         cta_label: created.cta_label ?? '',
+        audience_type: normalizeAudienceType(created.audience_type),
+        audience_filters: normalizeAudienceFilters(
+          normalizeAudienceType(created.audience_type),
+          created.audience_filters
+        ),
       })
     }
 
@@ -305,6 +456,12 @@ export default function CampaignsPage() {
       name: draft.name.trim().length > 0,
       subject: draft.subject.trim().length > 0,
       message: draft.message_body.trim().length > 0,
+      audience:
+        draft.audience_type === 'booked_within' || draft.audience_type === 'created_within'
+          ? Boolean(draft.audience_filters.startDate && draft.audience_filters.endDate)
+          : draft.audience_type === 'not_booked_since'
+            ? Boolean(draft.audience_filters.sinceDate)
+            : true,
       ctaPair:
         (draft.cta_url.trim().length === 0 && draft.cta_label.trim().length === 0) ||
         (draft.cta_url.trim().length > 0 && draft.cta_label.trim().length > 0),
@@ -317,6 +474,7 @@ export default function CampaignsPage() {
       : '—'
 
   const panelTitle = selectedCampaign ? 'Campaign details' : 'Campaign builder'
+  const audienceSummary = getAudienceSummary(draft)
 
   return (
     <div style={{ minHeight: '100vh', background: T.bg, fontFamily: 'sans-serif', transition: 'background 0.2s' }}>
@@ -778,30 +936,132 @@ export default function CampaignsPage() {
                 )}
 
                 {stepIndex === 2 && (
-                  <div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                     <div style={{ fontSize: '10px', color: T.label, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
                       Step 3
                     </div>
                     <h2 style={{ fontSize: '16px', color: T.t1, margin: '0 0 8px' }}>Audience</h2>
-                    <div
-                      style={{
-                        background: T.hover,
-                        border: `1px solid ${T.border}`,
-                        borderRadius: '8px',
-                        padding: '14px 16px',
-                        marginBottom: '12px',
-                      }}
-                    >
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: T.t1, marginBottom: '4px' }}>
-                        All eligible customers
-                      </div>
-                      <div style={{ fontSize: '12px', color: T.t3, lineHeight: 1.6 }}>
-                        Audience preview will exclude customers without email and unsubscribed customers.
-                      </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {AUDIENCE_OPTIONS.map(option => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => updateAudienceType(option.value)}
+                          style={{
+                            padding: '14px 16px',
+                            borderRadius: '8px',
+                            border: draft.audience_type === option.value ? '1px solid #F4C300' : `1px solid ${T.border}`,
+                            background: draft.audience_type === option.value ? T.hover : T.card,
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: T.t1, marginBottom: '4px' }}>
+                            {option.label}
+                          </div>
+                          <div style={{ fontSize: '12px', color: T.t3, lineHeight: 1.6 }}>
+                            {option.value === 'all_eligible' && 'Includes customers who qualify for this campaign channel after safety exclusions.'}
+                            {option.value === 'has_email' && 'Focus on customers with an email address on file.'}
+                            {option.value === 'has_phone' && 'Useful for future SMS audiences, and kept here for saved audience continuity.'}
+                            {option.value === 'booked_within' && 'Targets customers with at least one booking inside the selected date range.'}
+                            {option.value === 'not_booked_since' && 'Targets customers who have not booked on or after the selected date.'}
+                            {option.value === 'created_within' && 'Targets customers added to your customer list during the selected date range.'}
+                          </div>
+                        </button>
+                      ))}
                     </div>
 
+                    {(draft.audience_type === 'booked_within' || draft.audience_type === 'created_within') && (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '11px', color: T.label, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>
+                            Start date
+                          </label>
+                          <input
+                            type="date"
+                            value={draft.audience_filters.startDate ?? ''}
+                            onChange={e => updateAudienceFilters({ startDate: e.target.value })}
+                            style={{
+                              width: '100%',
+                              padding: '10px 12px',
+                              borderRadius: '6px',
+                              border: `1px solid ${T.inputBorder}`,
+                              background: T.input,
+                              color: T.t1,
+                              fontSize: '13px',
+                              boxSizing: 'border-box',
+                              outline: 'none',
+                            }}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: '11px', color: T.label, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>
+                            End date
+                          </label>
+                          <input
+                            type="date"
+                            value={draft.audience_filters.endDate ?? ''}
+                            onChange={e => updateAudienceFilters({ endDate: e.target.value })}
+                            style={{
+                              width: '100%',
+                              padding: '10px 12px',
+                              borderRadius: '6px',
+                              border: `1px solid ${T.inputBorder}`,
+                              background: T.input,
+                              color: T.t1,
+                              fontSize: '13px',
+                              boxSizing: 'border-box',
+                              outline: 'none',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {draft.audience_type === 'not_booked_since' && (
+                      <div>
+                        <label style={{ display: 'block', fontSize: '11px', color: T.label, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>
+                          Since date
+                        </label>
+                        <input
+                          type="date"
+                          value={draft.audience_filters.sinceDate ?? ''}
+                          onChange={e => updateAudienceFilters({ sinceDate: e.target.value })}
+                          style={{
+                            width: '100%',
+                            padding: '10px 12px',
+                            borderRadius: '6px',
+                            border: `1px solid ${T.inputBorder}`,
+                            background: T.input,
+                            color: T.t1,
+                            fontSize: '13px',
+                            boxSizing: 'border-box',
+                            outline: 'none',
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {!validation.audience && (
+                      <div
+                        style={{
+                          background: T.isDark ? '#2a1f00' : '#fff8e1',
+                          border: `1px solid ${T.isDark ? '#5c4400' : '#f3d27a'}`,
+                          borderRadius: '8px',
+                          padding: '12px 14px',
+                          color: '#F4C300',
+                          fontSize: '12px',
+                          lineHeight: 1.6,
+                        }}
+                      >
+                        Complete the required date filters for this audience before saving the draft.
+                      </div>
+                    )}
+
                     <div style={{ fontSize: '12px', color: T.t3, lineHeight: 1.7 }}>
-                      Segmentation, saved audiences, and scheduled sends can come next. For this MVP, the builder is focused on safe all-customer campaigns only.
+                      Unsubscribed customers are still excluded at send time, and duplicate customer rows are still deduped by normalized email.
                     </div>
                   </div>
                 )}
@@ -847,6 +1107,31 @@ export default function CampaignsPage() {
                             {draft.cta_label.trim() || 'Open link'}
                           </div>
                         )}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        border: `1px solid ${T.border}`,
+                        borderRadius: '8px',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div style={{ padding: '12px 14px', borderBottom: `1px solid ${T.border}`, background: T.hover }}>
+                        <div style={{ fontSize: '11px', color: T.label, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>
+                          Audience summary
+                        </div>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: T.t1 }}>
+                          Audience: {audienceSummary.label}
+                        </div>
+                        {audienceSummary.detail && (
+                          <div style={{ fontSize: '12px', color: T.t3, lineHeight: 1.6, marginTop: '4px' }}>
+                            {audienceSummary.detail}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ padding: '12px 14px', background: T.card, fontSize: '12px', color: T.t3, lineHeight: 1.6 }}>
+                        Unsubscribe exclusions still apply, and duplicate customer rows remain deduped by normalized email at send time.
                       </div>
                     </div>
 
@@ -1054,10 +1339,11 @@ export default function CampaignsPage() {
                   disabled={
                     saving ||
                     draft.channel !== 'email' ||
-                    !validation.name ||
-                    !validation.subject ||
-                    !validation.message ||
-                    !validation.ctaPair
+                      !validation.name ||
+                      !validation.subject ||
+                      !validation.message ||
+                      !validation.audience ||
+                      !validation.ctaPair
                   }
                   style={{
                     padding: '9px 14px',
@@ -1073,6 +1359,7 @@ export default function CampaignsPage() {
                       !validation.name ||
                       !validation.subject ||
                       !validation.message ||
+                      !validation.audience ||
                       !validation.ctaPair
                         ? 'not-allowed'
                         : 'pointer',
@@ -1082,6 +1369,7 @@ export default function CampaignsPage() {
                       !validation.name ||
                       !validation.subject ||
                       !validation.message ||
+                      !validation.audience ||
                       !validation.ctaPair
                         ? 0.5
                         : 1,
