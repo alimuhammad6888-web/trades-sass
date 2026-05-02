@@ -46,6 +46,14 @@ type AudienceFilters = {
   sinceDate?: string
 }
 
+type AudiencePreview = {
+  success: true
+  baseAudienceCount: number
+  emailCandidateCount: number
+  dedupedRecipientCount: number
+  suppressedByOptOutCount: number
+}
+
 type BuilderDraft = {
   name: string
   channel: 'email' | 'sms'
@@ -197,6 +205,9 @@ export default function CampaignsPage() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [preview, setPreview] = useState<AudiencePreview | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewWarning, setPreviewWarning] = useState<string | null>(null)
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null)
   const [stepIndex, setStepIndex] = useState(0)
   const [draft, setDraft] = useState<BuilderDraft>(EMPTY_DRAFT)
@@ -290,6 +301,8 @@ export default function CampaignsPage() {
     setStepIndex(0)
     setError(null)
     setSuccess(null)
+    setPreview(null)
+    setPreviewWarning(null)
   }
 
   async function saveDraft() {
@@ -352,6 +365,43 @@ export default function CampaignsPage() {
 
     setSuccess('Draft saved.')
     setSaving(false)
+  }
+
+  async function loadAudiencePreview(currentDraft: BuilderDraft) {
+    const { data: { session } } = await supabase.auth.getSession()
+
+    if (!session?.access_token) {
+      setPreview(null)
+      setPreviewWarning('Preview unavailable until you log in again.')
+      setPreviewLoading(false)
+      return
+    }
+
+    const res = await fetch('/api/campaigns/audience-preview', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        channel: 'email',
+        audience_type: currentDraft.audience_type,
+        audience_filters: currentDraft.audience_filters,
+      }),
+    })
+
+    const data = await res.json().catch(() => null)
+
+    if (!res.ok) {
+      setPreview(null)
+      setPreviewWarning(data?.error ?? 'Audience preview is temporarily unavailable.')
+      setPreviewLoading(false)
+      return
+    }
+
+    setPreview(data as AudiencePreview)
+    setPreviewWarning(null)
+    setPreviewLoading(false)
   }
 
   async function sendCampaign() {
@@ -475,6 +525,46 @@ export default function CampaignsPage() {
 
   const panelTitle = selectedCampaign ? 'Campaign details' : 'Campaign builder'
   const audienceSummary = getAudienceSummary(draft)
+
+  useEffect(() => {
+    if (!tenant?.id || draft.channel !== 'email') {
+      setPreview(null)
+      setPreviewLoading(false)
+      setPreviewWarning(null)
+      return
+    }
+
+    if (!validation.audience) {
+      setPreview(null)
+      setPreviewLoading(false)
+      setPreviewWarning(null)
+      return
+    }
+
+    setPreviewLoading(true)
+    setPreviewWarning(null)
+
+    const timer = window.setTimeout(() => {
+      loadAudiencePreview(draft).catch(err => {
+        console.error('[campaigns page] preview error:', err)
+        setPreview(null)
+        setPreviewWarning('Audience preview is temporarily unavailable.')
+        setPreviewLoading(false)
+      })
+    }, 300)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [
+    tenant?.id,
+    draft.channel,
+    draft.audience_type,
+    draft.audience_filters.startDate,
+    draft.audience_filters.endDate,
+    draft.audience_filters.sinceDate,
+    validation.audience,
+  ])
 
   return (
     <div style={{ minHeight: '100vh', background: T.bg, fontFamily: 'sans-serif', transition: 'background 0.2s' }}>
@@ -1060,6 +1150,42 @@ export default function CampaignsPage() {
                       </div>
                     )}
 
+                    {validation.audience && (
+                      <div
+                        style={{
+                          background: T.hover,
+                          border: `1px solid ${T.border}`,
+                          borderRadius: '8px',
+                          padding: '12px 14px',
+                        }}
+                      >
+                        <div style={{ fontSize: '11px', color: T.label, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>
+                          Audience preview
+                        </div>
+                        {previewLoading ? (
+                          <div style={{ fontSize: '12px', color: T.t3, lineHeight: 1.6 }}>
+                            Estimating recipients...
+                          </div>
+                        ) : preview ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div style={{ fontSize: '13px', fontWeight: 700, color: T.t1 }}>
+                              Estimated recipients: {preview.dedupedRecipientCount}
+                            </div>
+                            <div style={{ fontSize: '12px', color: T.t3, lineHeight: 1.6 }}>
+                              Filtered from {preview.baseAudienceCount} customers
+                            </div>
+                            <div style={{ fontSize: '12px', color: T.t3, lineHeight: 1.6 }}>
+                              {preview.suppressedByOptOutCount} suppressed by opt-out
+                            </div>
+                          </div>
+                        ) : previewWarning ? (
+                          <div style={{ fontSize: '12px', color: '#F4C300', lineHeight: 1.6 }}>
+                            {previewWarning}
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+
                     <div style={{ fontSize: '12px', color: T.t3, lineHeight: 1.7 }}>
                       Unsubscribed customers are still excluded at send time, and duplicate customer rows are still deduped by normalized email.
                     </div>
@@ -1131,7 +1257,20 @@ export default function CampaignsPage() {
                         )}
                       </div>
                       <div style={{ padding: '12px 14px', background: T.card, fontSize: '12px', color: T.t3, lineHeight: 1.6 }}>
-                        Unsubscribe exclusions still apply, and duplicate customer rows remain deduped by normalized email at send time.
+                        <div>Unsubscribe exclusions still apply, and duplicate customer rows remain deduped by normalized email at send time.</div>
+                        {previewLoading ? (
+                          <div style={{ marginTop: '8px' }}>Estimating recipients...</div>
+                        ) : preview ? (
+                          <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div style={{ color: T.t1, fontWeight: 700 }}>
+                              Estimated recipients: {preview.dedupedRecipientCount}
+                            </div>
+                            <div>Filtered from {preview.baseAudienceCount} customers</div>
+                            <div>{preview.suppressedByOptOutCount} suppressed by opt-out</div>
+                          </div>
+                        ) : previewWarning ? (
+                          <div style={{ marginTop: '8px', color: '#F4C300' }}>{previewWarning}</div>
+                        ) : null}
                       </div>
                     </div>
 
