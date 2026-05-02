@@ -109,6 +109,10 @@ function nextDateUtc(value: string) {
   return date.toISOString()
 }
 
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
 function parseAudience(
   audienceType: unknown,
   audienceFilters: unknown
@@ -518,6 +522,8 @@ export async function POST(req: NextRequest) {
   const fromEmail = process.env.EMAIL_FROM ?? 'noreply@yourdomain.com'
   const replyTo = settings?.email ?? undefined
   const baseUrl = getBaseUrl()
+  const batchSize = 5
+  const batchDelayMs = 1000
   const deliveredRecipientIds: string[] = []
   const failedRecipientIds: string[] = []
   const eventRows: Array<{
@@ -529,71 +535,122 @@ export async function POST(req: NextRequest) {
     event_metadata: Record<string, string>
   }> = []
 
-  for (const customer of dedupedEligibleCustomers) {
-    const recipient = recipientByCustomerId.get(customer.id)
-    if (!recipient) continue
+  const numberOfBatches = Math.ceil(dedupedEligibleCustomers.length / batchSize)
 
-    const unsubscribeUrl = `${baseUrl}/api/campaigns/unsubscribe?token=${recipient.unsubscribe_token}`
-    const trackedCtaUrl =
-      campaign.cta_url && campaign.cta_url.trim()
-        ? `${baseUrl}/api/campaigns/click?token=${recipient.click_token}`
-        : null
+  console.log('[campaigns/send] throttling summary:', {
+    recipientCount: dedupedEligibleCustomers.length,
+    batchSize,
+    numberOfBatches,
+  })
 
-    const customerName = getDisplayName(customer)
-    const htmlParts = [
-      '<div style="font-family:sans-serif;line-height:1.6;color:#1a1917;">',
-      `<p>Hi ${escapeHtml(customerName)},</p>`,
-      `<div>${formatHtmlBody(campaign.message_body)}</div>`,
-    ]
+  for (let batchStart = 0; batchStart < dedupedEligibleCustomers.length; batchStart += batchSize) {
+    const batchIndex = Math.floor(batchStart / batchSize) + 1
+    const batchCustomers = dedupedEligibleCustomers.slice(batchStart, batchStart + batchSize)
 
-    if (trackedCtaUrl) {
-      const ctaLabel = escapeHtml(campaign.cta_label?.trim() || 'Learn more')
+    console.log('[campaigns/send] sending batch:', {
+      batchIndex,
+      numberOfBatches,
+      batchSize: batchCustomers.length,
+    })
+
+    for (const customer of batchCustomers) {
+      const recipient = recipientByCustomerId.get(customer.id)
+      if (!recipient) continue
+
+      const unsubscribeUrl = `${baseUrl}/api/campaigns/unsubscribe?token=${recipient.unsubscribe_token}`
+      const trackedCtaUrl =
+        campaign.cta_url && campaign.cta_url.trim()
+          ? `${baseUrl}/api/campaigns/click?token=${recipient.click_token}`
+          : null
+
+      const customerName = getDisplayName(customer)
+      const htmlParts = [
+        '<div style="font-family:sans-serif;line-height:1.6;color:#1a1917;">',
+        `<p>Hi ${escapeHtml(customerName)},</p>`,
+        `<div>${formatHtmlBody(campaign.message_body)}</div>`,
+      ]
+
+      if (trackedCtaUrl) {
+        const ctaLabel = escapeHtml(campaign.cta_label?.trim() || 'Learn more')
+        htmlParts.push(
+          `<p style="margin:24px 0;">` +
+            `<a href="${escapeHtml(trackedCtaUrl)}" ` +
+            'style="display:inline-block;padding:12px 18px;border-radius:6px;background:#1a1917;color:#ffffff;text-decoration:none;font-weight:700;">' +
+            `${ctaLabel}</a></p>`
+        )
+      }
+
       htmlParts.push(
-        `<p style="margin:24px 0;">` +
-          `<a href="${escapeHtml(trackedCtaUrl)}" ` +
-          'style="display:inline-block;padding:12px 18px;border-radius:6px;background:#1a1917;color:#ffffff;text-decoration:none;font-weight:700;">' +
-          `${ctaLabel}</a></p>`
+        `<p style="margin-top:24px;">— ${escapeHtml(tenantRow.name)}</p>`,
+        `<p style="margin-top:24px;font-size:12px;color:#666666;">` +
+          `To stop receiving campaign emails, <a href="${escapeHtml(unsubscribeUrl)}">unsubscribe here</a>.` +
+        '</p>',
+        '</div>'
       )
-    }
 
-    htmlParts.push(
-      `<p style="margin-top:24px;">— ${escapeHtml(tenantRow.name)}</p>`,
-      `<p style="margin-top:24px;font-size:12px;color:#666666;">` +
-        `To stop receiving campaign emails, <a href="${escapeHtml(unsubscribeUrl)}">unsubscribe here</a>.` +
-      '</p>',
-      '</div>'
-    )
+      const textParts = [
+        `Hi ${customerName},`,
+        '',
+        campaign.message_body,
+      ]
 
-    const textParts = [
-      `Hi ${customerName},`,
-      '',
-      campaign.message_body,
-    ]
+      if (trackedCtaUrl) {
+        textParts.push('', `${campaign.cta_label?.trim() || 'Learn more'}: ${trackedCtaUrl}`)
+      }
 
-    if (trackedCtaUrl) {
-      textParts.push('', `${campaign.cta_label?.trim() || 'Learn more'}: ${trackedCtaUrl}`)
-    }
+      textParts.push(
+        '',
+        `— ${tenantRow.name}`,
+        '',
+        `Unsubscribe: ${unsubscribeUrl}`
+      )
 
-    textParts.push(
-      '',
-      `— ${tenantRow.name}`,
-      '',
-      `Unsubscribe: ${unsubscribeUrl}`
-    )
+      try {
+        const resendResult = await resend.emails.send({
+          from: fromEmail,
+          to: normalizeEmail(customer.email)!,
+          subject: campaign.subject,
+          text: textParts.join('\n'),
+          html: htmlParts.join(''),
+          reply_to: replyTo,
+        } as any)
 
-    try {
-      const resendResult = await resend.emails.send({
-        from: fromEmail,
-        to: normalizeEmail(customer.email)!,
-        subject: campaign.subject,
-        text: textParts.join('\n'),
-        html: htmlParts.join(''),
-        reply_to: replyTo,
-      } as any)
+        const resendError = (resendResult as any)?.error
 
-      const resendError = (resendResult as any)?.error
+        if (resendError) {
+          failedRecipientIds.push(recipient.id)
+          eventRows.push({
+            tenant_id: auth.tenantId,
+            campaign_id: campaign.id,
+            campaign_recipient_id: recipient.id,
+            customer_id: customer.id,
+            event_type: 'failed',
+            event_metadata: {
+              reason: resendError.message ?? 'resend_error',
+            },
+          })
+          continue
+        }
 
-      if (resendError) {
+        deliveredRecipientIds.push(recipient.id)
+        eventRows.push({
+          tenant_id: auth.tenantId,
+          campaign_id: campaign.id,
+          campaign_recipient_id: recipient.id,
+          customer_id: customer.id,
+          event_type: 'sent',
+          event_metadata: {
+            provider_message_id: String((resendResult as any)?.id ?? ''),
+          },
+        })
+      } catch (error) {
+        console.error('[campaigns/send] resend send failed for recipient:', {
+          tenantId: auth.tenantId,
+          campaignId: campaign.id,
+          customerId: customer.id,
+          error: error instanceof Error ? error.message : String(error),
+        })
+
         failedRecipientIds.push(recipient.id)
         eventRows.push({
           tenant_id: auth.tenantId,
@@ -602,42 +659,14 @@ export async function POST(req: NextRequest) {
           customer_id: customer.id,
           event_type: 'failed',
           event_metadata: {
-            reason: resendError.message ?? 'resend_error',
+            reason: error instanceof Error ? error.message : 'unknown_error',
           },
         })
-        continue
       }
+    }
 
-      deliveredRecipientIds.push(recipient.id)
-      eventRows.push({
-        tenant_id: auth.tenantId,
-        campaign_id: campaign.id,
-        campaign_recipient_id: recipient.id,
-        customer_id: customer.id,
-        event_type: 'sent',
-        event_metadata: {
-          provider_message_id: String((resendResult as any)?.id ?? ''),
-        },
-      })
-    } catch (error) {
-      console.error('[campaigns/send] resend send failed for recipient:', {
-        tenantId: auth.tenantId,
-        campaignId: campaign.id,
-        customerId: customer.id,
-        error: error instanceof Error ? error.message : String(error),
-      })
-
-      failedRecipientIds.push(recipient.id)
-      eventRows.push({
-        tenant_id: auth.tenantId,
-        campaign_id: campaign.id,
-        campaign_recipient_id: recipient.id,
-        customer_id: customer.id,
-        event_type: 'failed',
-        event_metadata: {
-          reason: error instanceof Error ? error.message : 'unknown_error',
-        },
-      })
+    if (batchIndex < numberOfBatches) {
+      await sleep(batchDelayMs)
     }
   }
 
