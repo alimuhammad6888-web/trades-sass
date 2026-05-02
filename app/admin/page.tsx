@@ -109,6 +109,12 @@ export default function AdminPage() {
             <p style={{ fontSize: '13px', color: T3, margin: '4px 0 0' }}>{tenants.length} total</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <a href="/admin/onboarding" style={{
+              padding: '10px 20px', background: '#1a1a2e', color: '#c7d2fe', border: `1px solid ${BORDER}`, borderRadius: '6px',
+              fontSize: '13px', fontWeight: 700, textDecoration: 'none', fontFamily: 'sans-serif',
+            }}>
+              Onboarding
+            </a>
             <a href="/admin/sms-limits" style={{
               padding: '10px 20px', background: '#1a1a2e', color: '#c7d2fe', border: `1px solid ${BORDER}`, borderRadius: '6px',
               fontSize: '13px', fontWeight: 700, textDecoration: 'none', fontFamily: 'sans-serif',
