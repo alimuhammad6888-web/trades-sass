@@ -331,7 +331,7 @@ export default function DashboardAppLayout({ children }: { children: React.React
         }
       `}</style>
 
-      <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:S.contentBg, transition:'background 0.2s' }}>
+      <div style={{ display:'flex', height:'100vh', width:'100%', minWidth:0, overflowY:'hidden', overflowX:'hidden', background:S.contentBg, transition:'background 0.2s' }}>
 
         <div className="desktop-sidebar" style={{ width:collapsed?'60px':'220px', flexShrink:0, borderRight:`1px solid ${S.border}`, display:'flex', flexDirection:'column', transition:'width 0.2s ease', overflow:'hidden', height:'100vh', position:'sticky', top:0 }}>
           <Sidebar />
@@ -353,9 +353,9 @@ export default function DashboardAppLayout({ children }: { children: React.React
           </div>
         )}
 
-        <div style={{ flex:1, overflowY:'auto', overflowX:'hidden' }}>
+        <div style={{ flex:1, minWidth:0, width:'100%', overflowY:'auto', overflowX:'hidden' }}>
           <style>{`@media (max-width: 768px) { .mob-pad { padding-top: 52px !important; } }`}</style>
-          <div className="mob-pad">{children}</div>
+          <div className="mob-pad" style={{ minWidth:0, width:'100%' }}>{children}</div>
         </div>
       </div>
 

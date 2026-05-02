@@ -60,10 +60,18 @@ export default function OverviewPage() {
         .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px; }
         .main-grid { display:grid; grid-template-columns:1fr 260px; gap:20px; align-items:start; }
         .quick-links { display:flex; flex-direction:column; gap:8px; }
+        @media (max-width:1024px) {
+          .kpi-grid { grid-template-columns:repeat(2, minmax(0, 1fr)) !important; }
+          .main-grid { grid-template-columns:minmax(0, 1fr) !important; }
+        }
         @media (max-width:768px) {
           .kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
           .main-grid { grid-template-columns:1fr !important; }
           .quick-links { display:grid !important; grid-template-columns:repeat(2,1fr) !important; }
+        }
+        @media (max-width:560px) {
+          .kpi-grid { grid-template-columns:minmax(0, 1fr) !important; }
+          .quick-links { grid-template-columns:minmax(0, 1fr) !important; }
         }
       `}</style>
 
@@ -94,9 +102,9 @@ export default function OverviewPage() {
           ))}
         </div>
 
-        <div className="main-grid">
+        <div className="main-grid" style={{ minWidth:0 }}>
           {/* Recent bookings */}
-          <div>
+          <div style={{ minWidth:0 }}>
             <div style={{ fontSize:'10px', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.14em', color:T.label, marginBottom:'10px' }}>Recent bookings</div>
             <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:'12px', overflow:'hidden', transition:'background 0.2s' }}>
               {recent.length===0 && kpis===null ? (
@@ -116,10 +124,10 @@ export default function OverviewPage() {
                   onMouseEnter={e => e.currentTarget.style.background=T.hover}
                   onMouseLeave={e => e.currentTarget.style.background='transparent'}>
                   <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:'13px', fontWeight:500, color:T.t1, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                    <div style={{ fontSize:'13px', fontWeight:500, color:T.t1, overflowWrap:'anywhere', wordBreak:'break-word' }}>
                       {b.customers?.first_name} {b.customers?.last_name}
                     </div>
-                    <div style={{ fontSize:'11px', color:T.t3, marginTop:'2px' }}>
+                    <div style={{ fontSize:'11px', color:T.t3, marginTop:'2px', overflowWrap:'anywhere', wordBreak:'break-word' }}>
                       {b.services?.name} · {new Date(b.starts_at).toLocaleDateString('en-US', { month:'short', day:'numeric' })}
                     </div>
                   </div>
@@ -138,7 +146,7 @@ export default function OverviewPage() {
           </div>
 
           {/* Quick links */}
-          <div>
+          <div style={{ minWidth:0 }}>
             <div style={{ fontSize:'10px', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.14em', color:T.label, marginBottom:'10px' }}>Quick actions</div>
             <div className="quick-links">
               {[

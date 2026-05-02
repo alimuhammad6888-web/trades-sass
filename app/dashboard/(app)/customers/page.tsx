@@ -115,10 +115,29 @@ export default function CustomersPage() {
     <>
       <style>{`
         @keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:0.7} }
-        .cust-layout { display:flex; flex:1; overflow:hidden; }
-        .cust-list { width:300px; flex-shrink:0; display:flex; flex-direction:column; }
-        .cust-detail { flex:1; overflow-y:auto; display:flex; flex-direction:column; }
+        .cust-layout { display:flex; flex:1; overflow:hidden; min-width:0; }
+        .cust-list { width:300px; flex-shrink:0; display:flex; flex-direction:column; min-width:0; }
+        .cust-detail { flex:1; overflow-y:auto; display:flex; flex-direction:column; min-width:0; }
         .mob-back { display:none !important; }
+        @media (max-width:1024px) {
+          .cust-layout {
+            flex-direction:column;
+            overflow:auto;
+          }
+          .cust-list {
+            width:100% !important;
+            border-right:none !important;
+          }
+          .customer-detail-grid {
+            grid-template-columns:minmax(0, 1fr) !important;
+          }
+          .customer-stats-grid {
+            grid-template-columns:repeat(2, minmax(0, 1fr)) !important;
+          }
+          .booking-history-row {
+            align-items:flex-start !important;
+          }
+        }
         @media (max-width:768px) {
           .cust-list { width:100% !important; border-right:none !important; }
           .cust-detail { display:none !important; }
@@ -129,6 +148,9 @@ export default function CustomersPage() {
             z-index:20 !important;
             overflow-y:auto !important;
             padding-top:52px !important;
+          }
+          .customer-stats-grid {
+            grid-template-columns:minmax(0, 1fr) !important;
           }
           .mob-back { display:flex !important; }
         }
@@ -216,7 +238,7 @@ export default function CustomersPage() {
           )}
         </div>
 
-        <div className="cust-layout" style={{ marginTop: '16px' }}>
+        <div className="cust-layout" style={{ marginTop: '16px', minWidth: 0 }}>
           <div
             className="cust-list"
             style={{
@@ -323,6 +345,8 @@ export default function CustomersPage() {
                               style={{
                                 fontWeight: 600,
                                 fontSize: '14px',
+                                overflowWrap: 'anywhere',
+                                wordBreak: 'break-word',
                                 color: T.t1,
                                 marginBottom: '2px',
                               }}
@@ -333,6 +357,8 @@ export default function CustomersPage() {
                               style={{
                                 fontSize: '12px',
                                 color: T.t3,
+                                overflowWrap: 'anywhere',
+                                wordBreak: 'break-word',
                                 marginBottom: '1px',
                               }}
                             >
@@ -342,6 +368,8 @@ export default function CustomersPage() {
                               style={{
                                 fontSize: '11px',
                                 color: T.isDark ? '#444' : '#c8c4bc',
+                                overflowWrap: 'anywhere',
+                                wordBreak: 'break-word',
                               }}
                             >
                               {c.email}
@@ -426,7 +454,7 @@ export default function CustomersPage() {
                 Select a customer to view details
               </div>
             ) : selectedLocked ? (
-              <div style={{ padding: '20px', maxWidth: '600px' }}>
+              <div style={{ padding: '20px', maxWidth: '600px', width: '100%', minWidth: 0 }}>
                 <div
                   style={{
                     background: T.card,
@@ -498,7 +526,7 @@ export default function CustomersPage() {
                 </div>
               </div>
             ) : (
-              <div style={{ padding: '20px', maxWidth: '600px' }}>
+              <div style={{ padding: '20px', maxWidth: '600px', width: '100%', minWidth: 0 }}>
                 <div
                   style={{
                     background: T.card,
@@ -522,10 +550,12 @@ export default function CustomersPage() {
                   </h2>
 
                   <div
+                    className="customer-detail-grid"
                     style={{
                       display: 'grid',
                       gridTemplateColumns: '1fr 1fr',
                       gap: '10px',
+                      minWidth: 0,
                     }}
                   >
                     {[
@@ -549,7 +579,14 @@ export default function CustomersPage() {
                             >
                               {row.label}
                             </div>
-                            <div style={{ fontSize: '13px', color: T.t1 }}>
+                            <div
+                              style={{
+                                fontSize: '13px',
+                                color: T.t1,
+                                overflowWrap: 'anywhere',
+                                wordBreak: 'break-word',
+                              }}
+                            >
                               {row.value}
                             </div>
                           </div>
@@ -559,11 +596,13 @@ export default function CustomersPage() {
                 </div>
 
                 <div
+                  className="customer-stats-grid"
                   style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(3,1fr)',
                     gap: '10px',
                     marginBottom: '16px',
+                    minWidth: 0,
                   }}
                 >
                   {[
@@ -648,6 +687,7 @@ export default function CustomersPage() {
                       return (
                         <div
                           key={b.id}
+                          className="booking-history-row"
                           style={{
                             padding: '12px 16px',
                             borderBottom: `1px solid ${T.divider}`,
@@ -663,9 +703,8 @@ export default function CustomersPage() {
                                 fontSize: '13px',
                                 fontWeight: 500,
                                 color: T.t1,
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
+                                overflowWrap: 'anywhere',
+                                wordBreak: 'break-word',
                               }}
                             >
                               {b.services?.name}
@@ -683,11 +722,13 @@ export default function CustomersPage() {
                           </div>
 
                           <div
+                            className="booking-history-meta"
                             style={{
                               display: 'flex',
                               alignItems: 'center',
                               gap: '8px',
                               flexShrink: 0,
+                              flexWrap: 'wrap',
                             }}
                           >
                             <span style={{ fontSize: '12px', color: T.t2 }}>

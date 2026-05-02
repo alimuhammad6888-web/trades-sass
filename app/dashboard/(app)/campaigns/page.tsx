@@ -568,6 +568,24 @@ export default function CampaignsPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: T.bg, fontFamily: 'sans-serif', transition: 'background 0.2s' }}>
+      <style>{`
+        @media (max-width: 1024px) {
+          .campaigns-layout-grid {
+            grid-template-columns: minmax(0, 1fr) !important;
+          }
+
+          .campaigns-four-col-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .campaigns-four-col-grid,
+          .campaigns-two-col-grid {
+            grid-template-columns: minmax(0, 1fr) !important;
+          }
+        }
+      `}</style>
       <div style={{ maxWidth: '1180px', margin: '0 auto', padding: '20px' }}>
         <div
           style={{
@@ -684,10 +702,13 @@ export default function CampaignsPage() {
         )}
 
         <div
+          className="campaigns-layout-grid"
           style={{
             display: 'grid',
             gridTemplateColumns: 'minmax(320px, 420px) minmax(0, 1fr)',
             gap: '16px',
+            minWidth: 0,
+            overflowX: 'auto',
           }}
         >
           <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: '8px', overflow: 'hidden' }}>
@@ -759,6 +780,7 @@ export default function CampaignsPage() {
                       </div>
 
                       <div
+                        className="campaigns-four-col-grid"
                         style={{
                           display: 'grid',
                           gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
@@ -816,7 +838,7 @@ export default function CampaignsPage() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0 }}>
             <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: '8px', overflow: 'hidden' }}>
               <div style={{ padding: '16px 18px', borderBottom: `1px solid ${T.border}` }}>
                 <div style={{ fontSize: '13px', fontWeight: 700, color: T.t1 }}>{panelTitle}</div>
@@ -825,7 +847,7 @@ export default function CampaignsPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', borderBottom: `1px solid ${T.border}` }}>
+              <div className="campaigns-four-col-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', borderBottom: `1px solid ${T.border}`, overflowX: 'auto' }}>
                 {STEPS.map((step, index) => (
                   <button
                     key={step}
@@ -855,7 +877,7 @@ export default function CampaignsPage() {
                     </div>
                     <h2 style={{ fontSize: '16px', color: T.t1, margin: '0 0 10px' }}>Choose a channel</h2>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px' }}>
+                    <div className="campaigns-two-col-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px' }}>
                       <button
                         type="button"
                         onClick={() => updateDraft('channel', 'email')}
@@ -977,7 +999,7 @@ export default function CampaignsPage() {
                       />
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px' }}>
+                    <div className="campaigns-two-col-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px' }}>
                       <div>
                         <label style={{ display: 'block', fontSize: '11px', color: T.label, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>
                           CTA label
@@ -1063,7 +1085,7 @@ export default function CampaignsPage() {
                     </div>
 
                     {(draft.audience_type === 'booked_within' || draft.audience_type === 'created_within') && (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px' }}>
+                      <div className="campaigns-two-col-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px' }}>
                         <div>
                           <label style={{ display: 'block', fontSize: '11px', color: T.label, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>
                             Start date
