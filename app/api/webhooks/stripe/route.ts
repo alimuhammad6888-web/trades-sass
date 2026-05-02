@@ -195,6 +195,54 @@ export async function POST(req: NextRequest) {
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session
+      const bookingId =
+        typeof session.metadata?.booking_id === 'string'
+          ? session.metadata.booking_id
+          : null
+
+      if (session.mode === 'payment' && bookingId) {
+        const tenantId =
+          typeof session.metadata?.tenant_id === 'string'
+            ? session.metadata.tenant_id
+            : null
+        const paymentIntentId = getIdFromExpandable(session.payment_intent)
+        const amountPaid =
+          typeof session.amount_total === 'number' ? session.amount_total : null
+        const currency =
+          typeof session.currency === 'string' ? session.currency : 'usd'
+
+        const query = supabaseAdmin
+          .from('bookings')
+          .update({
+            payment_status: 'paid',
+            stripe_checkout_session_id: session.id,
+            stripe_payment_intent_id: paymentIntentId,
+            amount_paid: amountPaid,
+            currency,
+          })
+          .eq('id', bookingId)
+
+        const { error: bookingErr } = tenantId
+          ? await query.eq('tenant_id', tenantId)
+          : await query
+
+        if (bookingErr) {
+          console.error('[stripe webhook] booking payment update failed:', bookingErr.message)
+          break
+        }
+
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '')
+        if (appUrl) {
+          fetch(`${appUrl}/api/booking-notify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bookingId }),
+          }).catch(err => console.error('[stripe webhook] booking notify failed:', err))
+        }
+
+        break
+      }
+
       const tenantId = session.client_reference_id
       const cusId = getIdFromExpandable(session.customer)
       const subId = getIdFromExpandable(session.subscription)

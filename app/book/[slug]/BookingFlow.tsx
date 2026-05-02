@@ -2,7 +2,7 @@
 
 // app/book/[slug]/BookingFlow.tsx
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { hasFeature } from '@/lib/features'
 import { adjustHex, getTenantBrandMarkCss, getTenantTheme, tenantPublicChrome } from '@/lib/tenant-theme'
 
@@ -84,6 +84,8 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [bookingRef, setBookingRef] = useState('')
+  const [paymentComplete, setPaymentComplete] = useState(false)
+  const [paymentBanner, setPaymentBanner] = useState('')
 
   const paymentsEnabled = hasFeature(tenant, 'payments')
 
@@ -95,6 +97,24 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
     bgBorderAmount: 28,
     textMutedAmount: -130,
   })
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const payment = params.get('payment')
+    const bookingRefParam = params.get('booking_ref')
+
+    if (payment === 'success') {
+      if (bookingRefParam) setBookingRef(bookingRefParam)
+      setPaymentComplete(true)
+      setStep('done')
+      setPaymentBanner('')
+      return
+    }
+
+    if (payment === 'cancelled') {
+      setPaymentBanner('Payment was cancelled. Your booking was not completed.')
+    }
+  }, [])
 
   // ── Validation ────────────────────────────────────────────────────────────
   function validate() {
@@ -133,7 +153,12 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
         setSubmitting(false)
         return
       }
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl
+        return
+      }
       setBookingRef(data.bookingRef)
+      setPaymentComplete(false)
       setStep('done')
       fetch('/api/booking-notify', {
         method: 'POST',
@@ -207,6 +232,11 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
             <h2 style={{ fontFamily: tenantPublicChrome.fontDisplay, fontSize: '28px', fontWeight: 900, textTransform: 'uppercase', color: textColor, marginBottom: '4px' }}>What do you need?</h2>
             <p style={{ fontSize: '13px', color: textMuted }}>Select a service to get started</p>
           </div>
+          {paymentBanner && (
+            <div style={{ marginTop: '16px', background: bgSurface, border: `1px solid ${bgBorder}`, borderLeft: `3px solid ${accent}`, borderRadius: '6px', padding: '10px 14px', fontSize: '13px', color: textColor }}>
+              {paymentBanner}
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '20px' }}>
             {services.map(sv => (
               <button
@@ -375,7 +405,11 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
               )}
 
               <button style={{ ...btn, opacity: submitting ? 0.6 : 1 }} disabled={submitting} onClick={submitBooking}>
-                {submitting ? 'Submitting...' : 'Submit booking request'}
+                {submitting
+                  ? 'Submitting...'
+                  : paymentsEnabled
+                    ? 'Continue to payment'
+                    : 'Submit booking request'}
               </button>
 
               {!paymentsEnabled && (
@@ -400,14 +434,25 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
             <path d="M5 13l4 4L19 7" stroke={bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
-        <h2 style={{ fontFamily: tenantPublicChrome.fontDisplay, fontSize: '28px', fontWeight: 900, textTransform: 'uppercase', color: brand, marginBottom: '10px' }}>Request received!</h2>
-        <p style={{ color: textMuted, fontSize: '14px', lineHeight: 1.7, marginBottom: '6px' }}>
-          {selService?.name} · {selDate} at {selTime}
-        </p>
-        <p style={{ color: adjustHex(textMuted, -20), fontSize: '13px', marginBottom: '24px' }}>
-          Check your phone and email — we've sent you a confirmation. The team will be in touch shortly.
-        </p>
+        <h2 style={{ fontFamily: tenantPublicChrome.fontDisplay, fontSize: '28px', fontWeight: 900, textTransform: 'uppercase', color: brand, marginBottom: '10px' }}>
+          {paymentComplete ? 'Payment received!' : 'Request received!'}
+        </h2>
+        {paymentComplete ? (
+          <p style={{ color: adjustHex(textMuted, -20), fontSize: '13px', marginBottom: '24px' }}>
+            Thanks — your booking payment was successful. We&apos;ll send your confirmation shortly.
+          </p>
+        ) : (
+          <>
+            <p style={{ color: textMuted, fontSize: '14px', lineHeight: 1.7, marginBottom: '6px' }}>
+              {selService?.name} · {selDate} at {selTime}
+            </p>
+            <p style={{ color: adjustHex(textMuted, -20), fontSize: '13px', marginBottom: '24px' }}>
+              Check your phone and email — we&apos;ve sent you a confirmation. The team will be in touch shortly.
+            </p>
+          </>
+        )}
 
+        {!paymentComplete && (
         <div style={{ background: bgCard, border: `1px solid ${bgBorder}`, borderRadius: '8px', padding: '16px', marginBottom: '20px', textAlign: 'left' }}>
           <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: textMuted, marginBottom: '10px' }}>Notifications sent</div>
           {[
@@ -421,6 +466,7 @@ export default function BookingFlow({ slug, initialTenant, initialServices }: Pr
             </div>
           ))}
         </div>
+        )}
 
         <div style={{ background: bgSurface, border: `1px solid ${bgBorder}`, borderRadius: '6px', padding: '10px 16px', display: 'inline-block' }}>
           <span style={{ fontSize: '11px', color: textMuted, fontFamily: 'monospace' }}>Booking ref: </span>

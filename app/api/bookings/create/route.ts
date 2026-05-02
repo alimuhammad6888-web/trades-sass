@@ -1,6 +1,7 @@
 // app/api/bookings/create/route.ts
 // Server-side booking creation — validates tenant, service, upserts customer, creates booking.
 import { NextRequest, NextResponse } from 'next/server'
+import { stripe } from '@/lib/stripe'
 import { createClient } from '@supabase/supabase-js'
 import {
   buildCustomerUpdatePayload,
@@ -58,6 +59,22 @@ export async function POST(req: NextRequest) {
     }
 
     const tenantId = tenant.id
+
+    const { data: billingRow, error: billingErr } = await supabase
+      .from('tenant_billing')
+      .select(
+        'connected_account_id, booking_payments_enabled, stripe_connect_charges_enabled, stripe_connect_details_submitted'
+      )
+      .eq('tenant_id', tenantId)
+      .maybeSingle()
+
+    if (billingErr) {
+      console.error('[bookings/create] tenant billing lookup failed:', billingErr)
+      return NextResponse.json({ error: 'Failed to load billing settings' }, { status: 500 })
+    }
+
+    const bookingPaymentsEnabled = billingRow?.booking_payments_enabled === true
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ?? req.nextUrl.origin
 
     // ── 5. Load booking rules from business_settings ──────────────
     const { data: settings } = await supabase
@@ -196,21 +213,28 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 12. Create booking ────────────────────────────────────────
-    const bookingStatus = autoConfirm ? 'confirmed' : 'pending'
+    const bookingStatus = bookingPaymentsEnabled
+      ? 'pending'
+      : autoConfirm
+        ? 'confirmed'
+        : 'pending'
+    const bookingInsert: Record<string, unknown> = {
+      tenant_id: tenantId,
+      customer_id: customerId,
+      service_id: service.id,
+      starts_at: starts.toISOString(),
+      ends_at: ends.toISOString(),
+      price_cents: service.price_cents,
+      notes: notes?.trim() || null,
+      status: bookingStatus,
+      currency: 'usd',
+      ...(bookingPaymentsEnabled ? { payment_status: 'unpaid' } : {}),
+      ...(!bookingPaymentsEnabled && autoConfirm ? { confirmed_at: new Date().toISOString() } : {}),
+    }
     const { data: booking, error: bookingErr } = await supabase
       .from('bookings')
-      .insert({
-        tenant_id:    tenantId,
-        customer_id:  customerId,
-        service_id:   service.id,
-        starts_at:    starts.toISOString(),
-        ends_at:      ends.toISOString(),
-        price_cents:  service.price_cents,
-        notes:        notes?.trim() || null,
-        status:       bookingStatus,
-        ...(autoConfirm ? { confirmed_at: new Date().toISOString() } : {}),
-      })
-      .select('id')
+      .insert(bookingInsert)
+      .select('id, payment_status')
       .single()
 
     if (bookingErr || !booking) {
@@ -218,11 +242,115 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to create booking' }, { status: 500 })
     }
 
+    const bookingRef = booking.id.slice(0, 8).toUpperCase()
+
+    if (bookingPaymentsEnabled) {
+      if (
+        !billingRow?.connected_account_id ||
+        !billingRow.stripe_connect_charges_enabled ||
+        !billingRow.stripe_connect_details_submitted
+      ) {
+        return NextResponse.json(
+          { error: 'Online booking payments are not available right now.' },
+          { status: 503 }
+        )
+      }
+
+      if (!(typeof service.price_cents === 'number' && service.price_cents > 0)) {
+        return NextResponse.json(
+          { error: 'This service is not available for online payment.' },
+          { status: 400 }
+        )
+      }
+
+      try {
+        const session = await stripe.checkout.sessions.create({
+          mode: 'payment',
+          success_url: `${appUrl}/book/${slug}?payment=success&booking_ref=${encodeURIComponent(bookingRef)}&booking_id=${encodeURIComponent(booking.id)}&session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${appUrl}/book/${slug}?payment=cancelled`,
+          customer_email: identity.normalizedEmail ?? email.trim().toLowerCase(),
+          line_items: [
+            {
+              quantity: 1,
+              price_data: {
+                currency: 'usd',
+                unit_amount: service.price_cents,
+                product_data: {
+                  name: service.name,
+                  description: `${date} at ${time}`,
+                },
+              },
+            },
+          ],
+          payment_intent_data: {
+            transfer_data: {
+              destination: billingRow.connected_account_id,
+            },
+            metadata: {
+              tenant_id: tenantId,
+              booking_id: booking.id,
+              service_id: service.id,
+              customer_id: customerId,
+            },
+          },
+          metadata: {
+            tenant_id: tenantId,
+            booking_id: booking.id,
+            service_id: service.id,
+            customer_id: customerId,
+          },
+        })
+
+        if (!session.url) {
+          await supabase
+            .from('bookings')
+            .update({ payment_status: 'failed' })
+            .eq('id', booking.id)
+
+          return NextResponse.json({ error: 'Failed to create checkout session' }, { status: 500 })
+        }
+
+        const paymentIntentId =
+          typeof session.payment_intent === 'string' ? session.payment_intent : null
+
+        const { error: paymentUpdateErr } = await supabase
+          .from('bookings')
+          .update({
+            stripe_checkout_session_id: session.id,
+            stripe_payment_intent_id: paymentIntentId,
+            payment_status: 'pending',
+            currency: 'usd',
+          })
+          .eq('id', booking.id)
+
+        if (paymentUpdateErr) {
+          console.error('[bookings/create] booking payment update failed:', paymentUpdateErr)
+          return NextResponse.json({ error: 'Failed to prepare checkout session' }, { status: 500 })
+        }
+
+        return NextResponse.json({
+          success: true,
+          bookingId: booking.id,
+          bookingRef,
+          autoConfirmed: autoConfirm,
+          checkoutUrl: session.url,
+        })
+      } catch (stripeErr) {
+        console.error('[bookings/create] stripe checkout creation failed:', stripeErr)
+        await supabase
+          .from('bookings')
+          .update({ payment_status: 'failed' })
+          .eq('id', booking.id)
+
+        return NextResponse.json({ error: 'Failed to create checkout session' }, { status: 500 })
+      }
+    }
+
     // ── 13. Return success ────────────────────────────────────────
     return NextResponse.json({
       success:       true,
       bookingId:     booking.id,
-      bookingRef:    booking.id.slice(0, 8).toUpperCase(),
+      bookingRef,
       autoConfirmed: autoConfirm,
     })
 
