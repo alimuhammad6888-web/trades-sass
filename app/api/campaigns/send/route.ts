@@ -526,14 +526,6 @@ export async function POST(req: NextRequest) {
   const batchDelayMs = 1000
   const deliveredRecipientIds: string[] = []
   const failedRecipientIds: string[] = []
-  const eventRows: Array<{
-    tenant_id: string
-    campaign_id: string
-    campaign_recipient_id: string
-    customer_id: string
-    event_type: 'sent' | 'failed'
-    event_metadata: Record<string, string>
-  }> = []
 
   const numberOfBatches = Math.ceil(dedupedEligibleCustomers.length / batchSize)
 
@@ -619,30 +611,98 @@ export async function POST(req: NextRequest) {
 
         if (resendError) {
           failedRecipientIds.push(recipient.id)
-          eventRows.push({
-            tenant_id: auth.tenantId,
-            campaign_id: campaign.id,
-            campaign_recipient_id: recipient.id,
-            customer_id: customer.id,
-            event_type: 'failed',
-            event_metadata: {
-              reason: resendError.message ?? 'resend_error',
-            },
-          })
+
+          const safeErrorMessage = resendError.message ?? 'resend_error'
+          const failedAt = new Date().toISOString()
+
+          const { error: recipientUpdateErr } = await supabaseAdmin
+            .from('campaign_recipients')
+            .update({
+              delivery_status: 'failed',
+              failed_at: failedAt,
+              failure_reason: safeErrorMessage,
+              error_message: safeErrorMessage,
+            })
+            .eq('id', recipient.id)
+            .eq('tenant_id', auth.tenantId)
+
+          if (recipientUpdateErr) {
+            console.error('[campaigns/send] failed to mark recipient failed:', {
+              tenantId: auth.tenantId,
+              campaignId: campaign.id,
+              recipientId: recipient.id,
+              error: recipientUpdateErr.message,
+            })
+          }
+
+          const { error: eventErr } = await supabaseAdmin
+            .from('campaign_events')
+            .insert({
+              tenant_id: auth.tenantId,
+              campaign_id: campaign.id,
+              campaign_recipient_id: recipient.id,
+              customer_id: customer.id,
+              event_type: 'failed',
+              event_metadata: {
+                reason: safeErrorMessage,
+              },
+            })
+
+          if (eventErr) {
+            console.error('[campaigns/send] failed to insert failed event:', {
+              tenantId: auth.tenantId,
+              campaignId: campaign.id,
+              recipientId: recipient.id,
+              error: eventErr.message,
+            })
+          }
           continue
         }
 
         deliveredRecipientIds.push(recipient.id)
-        eventRows.push({
-          tenant_id: auth.tenantId,
-          campaign_id: campaign.id,
-          campaign_recipient_id: recipient.id,
-          customer_id: customer.id,
-          event_type: 'sent',
-          event_metadata: {
-            provider_message_id: String((resendResult as any)?.id ?? ''),
-          },
-        })
+        const sentAt = new Date().toISOString()
+        const providerMessageId = String((resendResult as any)?.id ?? '')
+
+        const { error: recipientUpdateErr } = await supabaseAdmin
+          .from('campaign_recipients')
+          .update({
+            delivery_status: 'sent',
+            sent_at: sentAt,
+            provider_message_id: providerMessageId || null,
+          })
+          .eq('id', recipient.id)
+          .eq('tenant_id', auth.tenantId)
+
+        if (recipientUpdateErr) {
+          console.error('[campaigns/send] failed to mark recipient sent:', {
+            tenantId: auth.tenantId,
+            campaignId: campaign.id,
+            recipientId: recipient.id,
+            error: recipientUpdateErr.message,
+          })
+        }
+
+        const { error: eventErr } = await supabaseAdmin
+          .from('campaign_events')
+          .insert({
+            tenant_id: auth.tenantId,
+            campaign_id: campaign.id,
+            campaign_recipient_id: recipient.id,
+            customer_id: customer.id,
+            event_type: 'sent',
+            event_metadata: {
+              provider_message_id: providerMessageId,
+            },
+          })
+
+        if (eventErr) {
+          console.error('[campaigns/send] failed to insert sent event:', {
+            tenantId: auth.tenantId,
+            campaignId: campaign.id,
+            recipientId: recipient.id,
+            error: eventErr.message,
+          })
+        }
       } catch (error) {
         console.error('[campaigns/send] resend send failed for recipient:', {
           tenantId: auth.tenantId,
@@ -652,16 +712,50 @@ export async function POST(req: NextRequest) {
         })
 
         failedRecipientIds.push(recipient.id)
-        eventRows.push({
-          tenant_id: auth.tenantId,
-          campaign_id: campaign.id,
-          campaign_recipient_id: recipient.id,
-          customer_id: customer.id,
-          event_type: 'failed',
-          event_metadata: {
-            reason: error instanceof Error ? error.message : 'unknown_error',
-          },
-        })
+        const safeErrorMessage = error instanceof Error ? error.message : 'unknown_error'
+        const failedAt = new Date().toISOString()
+
+        const { error: recipientUpdateErr } = await supabaseAdmin
+          .from('campaign_recipients')
+          .update({
+            delivery_status: 'failed',
+            failed_at: failedAt,
+            failure_reason: safeErrorMessage,
+            error_message: safeErrorMessage,
+          })
+          .eq('id', recipient.id)
+          .eq('tenant_id', auth.tenantId)
+
+        if (recipientUpdateErr) {
+          console.error('[campaigns/send] failed to mark recipient failed:', {
+            tenantId: auth.tenantId,
+            campaignId: campaign.id,
+            recipientId: recipient.id,
+            error: recipientUpdateErr.message,
+          })
+        }
+
+        const { error: eventErr } = await supabaseAdmin
+          .from('campaign_events')
+          .insert({
+            tenant_id: auth.tenantId,
+            campaign_id: campaign.id,
+            campaign_recipient_id: recipient.id,
+            customer_id: customer.id,
+            event_type: 'failed',
+            event_metadata: {
+              reason: safeErrorMessage,
+            },
+          })
+
+        if (eventErr) {
+          console.error('[campaigns/send] failed to insert failed event:', {
+            tenantId: auth.tenantId,
+            campaignId: campaign.id,
+            recipientId: recipient.id,
+            error: eventErr.message,
+          })
+        }
       }
     }
 
@@ -671,72 +765,6 @@ export async function POST(req: NextRequest) {
   }
 
   const nowIso = new Date().toISOString()
-
-  if (deliveredRecipientIds.length > 0) {
-    const sentRecipientIds = Array.from(new Set(deliveredRecipientIds))
-    const sentProviderIds = new Map(
-      eventRows
-        .filter(row => row.event_type === 'sent')
-        .map(row => [row.campaign_recipient_id, row.event_metadata.provider_message_id || null])
-    )
-
-    for (const recipientId of sentRecipientIds) {
-      const { error } = await supabaseAdmin
-        .from('campaign_recipients')
-        .update({
-          delivery_status: 'sent',
-          sent_at: nowIso,
-          provider_message_id: sentProviderIds.get(recipientId),
-        })
-        .eq('id', recipientId)
-        .eq('tenant_id', auth.tenantId)
-
-      if (error) {
-        console.error('[campaigns/send] failed to mark recipient sent:', error.message)
-      }
-    }
-  }
-
-  if (failedRecipientIds.length > 0) {
-    const uniqueFailedRecipientIds = Array.from(new Set(failedRecipientIds))
-    const failureReasons = new Map(
-      eventRows
-        .filter(row => row.event_type === 'failed')
-        .map(row => [row.campaign_recipient_id, row.event_metadata.reason || 'send_failed'])
-    )
-
-    for (const recipientId of uniqueFailedRecipientIds) {
-      const { error } = await supabaseAdmin
-        .from('campaign_recipients')
-        .update({
-          delivery_status: 'failed',
-          failed_at: nowIso,
-          failure_reason: failureReasons.get(recipientId),
-        })
-        .eq('id', recipientId)
-        .eq('tenant_id', auth.tenantId)
-
-      if (error) {
-        console.error('[campaigns/send] failed to mark recipient failed:', error.message)
-      }
-    }
-  }
-
-  if (eventRows.length > 0) {
-    const { error: eventErr } = await supabaseAdmin
-      .from('campaign_events')
-      .insert(eventRows)
-
-    if (eventErr) {
-      console.error('[campaigns/send] failed to insert campaign events:', eventErr.message)
-      await markCampaignFailed({
-        tenantId: auth.tenantId,
-        campaignId: campaign.id,
-        reason: 'event_insert_failed',
-      })
-      return bad('Failed to record campaign send events.', 500)
-    }
-  }
 
   const deliveredCount = deliveredRecipientIds.length
   const failedCount = failedRecipientIds.length
