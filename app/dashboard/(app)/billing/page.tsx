@@ -23,6 +23,10 @@ type BillingRow = {
   stripe_subscription_id: string | null
   stripe_price_id:        string | null
   cancel_at_period_end:   boolean
+  connected_account_id: string | null
+  booking_payments_enabled: boolean
+  stripe_connect_charges_enabled: boolean
+  stripe_connect_details_submitted: boolean
 }
 
 type SmsUsageData = {
@@ -75,6 +79,12 @@ function formatPlanLabel(plan: string | null | undefined): string {
   return labels[canonical] ?? 'No plan'
 }
 
+function maskConnectedAccountId(value: string | null | undefined): string {
+  if (!value) return 'Not connected'
+  if (value.length <= 10) return value
+  return `${value.slice(0, 6)}...${value.slice(-4)}`
+}
+
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, { label: string; bg: string; color: string }> = {
     active:    { label: 'Active',    bg: '#0d2b1e', color: '#34d399' },
@@ -124,19 +134,23 @@ export default function BillingPage() {
   const [openingPortal, setOpeningPortal] = useState(false)
   const [error, setError]             = useState<string | null>(null)
   const [checkoutResult, setCheckoutResult] = useState<string | null>(null)
+  const [connectResult, setConnectResult] = useState<string | null>(null)
+  const [startingConnect, setStartingConnect] = useState(false)
+  const [updatingBookingPayments, setUpdatingBookingPayments] = useState(false)
   const [smsUsage, setSmsUsage] = useState<SmsUsageData | null>(null)
   const [smsUsageLoading, setSmsUsageLoading] = useState(true)
 
   useEffect(() => {
-    const param = new URLSearchParams(window.location.search).get('checkout')
-    setCheckoutResult(param)
+    const params = new URLSearchParams(window.location.search)
+    setCheckoutResult(params.get('checkout'))
+    setConnectResult(params.get('connect'))
   }, [])
 
   useEffect(() => {
     if (!tenant?.id) return
     supabase
       .from('tenant_billing')
-      .select('status, billing_enabled, trial_ends_at, current_period_end, stripe_customer_id, stripe_subscription_id, stripe_price_id, cancel_at_period_end')
+      .select('status, billing_enabled, trial_ends_at, current_period_end, stripe_customer_id, stripe_subscription_id, stripe_price_id, cancel_at_period_end, connected_account_id, booking_payments_enabled, stripe_connect_charges_enabled, stripe_connect_details_submitted')
       .eq('tenant_id', tenant.id)
       .maybeSingle()
       .then(({ data, error: err }) => {
@@ -240,6 +254,84 @@ export default function BillingPage() {
     }
   }
 
+  async function startStripeConnect() {
+    if (!tenant?.id) return
+    setStartingConnect(true)
+    setError(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        setError('Session expired — please log in again.')
+        setStartingConnect(false)
+        return
+      }
+      const res = await fetch('/api/billing/connect/start', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      })
+      const data = await res.json()
+      if (!res.ok || !data.url) {
+        setError(data.error ?? 'Failed to start Stripe Connect.')
+        setStartingConnect(false)
+        return
+      }
+      window.location.href = data.url
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unexpected error')
+      setStartingConnect(false)
+    }
+  }
+
+  async function toggleBookingPayments(enabled: boolean) {
+    if (!tenant?.id || !billing) return
+
+    setUpdatingBookingPayments(true)
+    setError(null)
+
+    const previous = billing.booking_payments_enabled
+    setBilling({
+      ...billing,
+      booking_payments_enabled: enabled,
+    })
+
+    const { data: { session } } = await supabase.auth.getSession()
+
+    if (!session?.access_token) {
+      setBilling({
+        ...billing,
+        booking_payments_enabled: previous,
+      })
+      setError('Session expired — please log in again.')
+      setUpdatingBookingPayments(false)
+      return
+    }
+
+    const res = await fetch('/api/billing/connect/toggle', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ enabled }),
+    })
+
+    const data = await res.json().catch(() => null)
+
+    if (!res.ok) {
+      console.error('[billing page] booking payments toggle error:', data?.error ?? 'Unknown error')
+      setBilling({
+        ...billing,
+        booking_payments_enabled: previous,
+      })
+      setError(data?.error ?? 'Failed to update booking payments setting.')
+    }
+
+    setUpdatingBookingPayments(false)
+  }
+
   const isActive   = billing?.billing_enabled && billing?.status === 'active'
   const renewLabel = billing?.cancel_at_period_end ? 'Cancels on' : 'Renews on'
   const dateToShow = billing?.status === 'trial'
@@ -248,6 +340,10 @@ export default function BillingPage() {
 
   const paymentsEnabled = hasFeature(tenant, 'payments')
   const planLabel       = formatPlanLabel(tenant?.plan)
+  const connectReady =
+    Boolean(billing?.connected_account_id) &&
+    Boolean(billing?.stripe_connect_details_submitted) &&
+    Boolean(billing?.stripe_connect_charges_enabled)
   const smsCardTone =
     !smsUsage ? 'neutral' :
     smsUsage.percentUsed >= 100 ? 'critical' :
@@ -297,6 +393,30 @@ export default function BillingPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: T.card, border: `1px solid ${T.border}`, borderRadius: '8px', padding: '12px 16px', marginBottom: '20px' }}>
             <span style={{ fontSize: '16px' }}>↩</span>
             <span style={{ fontSize: '13px', color: T.t3 }}>Checkout cancelled — no changes were made.</span>
+          </div>
+        )}
+        {connectResult === 'success' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#0d2b1e', border: '1px solid #1a5c3a', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px' }}>
+            <span style={{ fontSize: '16px' }}>✓</span>
+            <span style={{ fontSize: '13px', color: '#34d399', fontWeight: 500 }}>Stripe Connect is linked for booking payments.</span>
+          </div>
+        )}
+        {connectResult === 'incomplete' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#2a1f00', border: '1px solid #5c4400', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px' }}>
+            <span style={{ fontSize: '16px' }}>!</span>
+            <span style={{ fontSize: '13px', color: '#F4C300', fontWeight: 500 }}>Stripe onboarding is not complete yet. Open Connect again to finish setup.</span>
+          </div>
+        )}
+        {connectResult === 'refresh' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: T.card, border: `1px solid ${T.border}`, borderRadius: '8px', padding: '12px 16px', marginBottom: '20px' }}>
+            <span style={{ fontSize: '16px' }}>↩</span>
+            <span style={{ fontSize: '13px', color: T.t3 }}>Stripe asked to refresh onboarding. Connect again to continue setup.</span>
+          </div>
+        )}
+        {connectResult === 'error' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#2a0d0d', border: '1px solid #5c1a1a', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px' }}>
+            <span style={{ fontSize: '16px' }}>!</span>
+            <span style={{ fontSize: '13px', color: '#f87171', fontWeight: 500 }}>We couldn't finish Stripe onboarding. Please try again.</span>
           </div>
         )}
         {error && (
@@ -466,14 +586,89 @@ export default function BillingPage() {
           <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: '10px', overflow: 'hidden', marginBottom: '24px' }}>
             <div style={{ padding: '16px 20px', borderBottom: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: '13px', fontWeight: 600, color: T.t1 }}>Customer Payments</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 600, background: '#0d2b1e', color: '#34d399' }}>
-                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#34d399', display: 'inline-block' }} />
-                Enabled
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 600, background: connectReady ? '#0d2b1e' : '#2a1f00', color: connectReady ? '#34d399' : '#F4C300' }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: connectReady ? '#34d399' : '#F4C300', display: 'inline-block' }} />
+                {connectReady ? 'Connected' : 'Not connected'}
               </span>
             </div>
             <div style={{ padding: '20px' }}>
-              <div style={{ fontSize: '13px', color: T.t3, lineHeight: 1.6 }}>
-                Payments setup coming soon.
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ fontSize: '13px', color: T.t3, lineHeight: 1.6 }}>
+                  Connect your Stripe account so booking payments can be collected into your own business account.
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '14px 16px', borderRadius: '8px', border: `1px solid ${T.border}`, background: T.isDark ? '#111111' : '#fafafa' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
+                    <span style={{ fontSize: '12px', color: T.t3, fontWeight: 500 }}>Connection</span>
+                    <span style={{ fontSize: '13px', color: T.t1, fontWeight: 600 }}>
+                      {billing?.connected_account_id ? maskConnectedAccountId(billing.connected_account_id) : 'Not connected'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
+                    <span style={{ fontSize: '12px', color: T.t3, fontWeight: 500 }}>Onboarding</span>
+                    <span style={{ fontSize: '13px', color: T.t1, fontWeight: 600 }}>
+                      {billing?.stripe_connect_details_submitted ? 'Submitted' : 'Needs setup'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
+                    <span style={{ fontSize: '12px', color: T.t3, fontWeight: 500 }}>Charges</span>
+                    <span style={{ fontSize: '13px', color: T.t1, fontWeight: 600 }}>
+                      {billing?.stripe_connect_charges_enabled ? 'Enabled' : 'Not enabled yet'}
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+                  <button
+                    onClick={startStripeConnect}
+                    disabled={startingConnect || !tenant?.id}
+                    style={{
+                      padding: '10px 18px',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      fontFamily: 'sans-serif',
+                      borderRadius: '6px',
+                      border: 'none',
+                      background: startingConnect ? T.border : (T.isDark ? '#F4C300' : '#1a1917'),
+                      color: T.isDark ? '#000' : '#fff',
+                      cursor: startingConnect || !tenant?.id ? 'not-allowed' : 'pointer',
+                      opacity: startingConnect || !tenant?.id ? 0.6 : 1,
+                    }}
+                  >
+                    {startingConnect
+                      ? 'Opening Stripe…'
+                      : billing?.connected_account_id
+                        ? 'Continue Stripe setup'
+                        : 'Connect Stripe'}
+                  </button>
+
+                  <button
+                    onClick={() => toggleBookingPayments(!billing?.booking_payments_enabled)}
+                    disabled={!connectReady || updatingBookingPayments || !tenant?.id}
+                    style={{
+                      padding: '10px 18px',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      fontFamily: 'sans-serif',
+                      borderRadius: '6px',
+                      border: `1px solid ${T.border}`,
+                      background: T.card,
+                      color: T.t1,
+                      cursor: !connectReady || updatingBookingPayments || !tenant?.id ? 'not-allowed' : 'pointer',
+                      opacity: !connectReady || updatingBookingPayments || !tenant?.id ? 0.6 : 1,
+                    }}
+                  >
+                    {updatingBookingPayments
+                      ? 'Saving…'
+                      : billing?.booking_payments_enabled
+                        ? 'Disable booking payments'
+                        : 'Enable booking payments'}
+                  </button>
+                </div>
+
+                <div style={{ fontSize: '12px', color: T.t3, lineHeight: 1.6 }}>
+                  Booking charges are not live in this phase yet. This only prepares your Stripe account and payment setting.
+                </div>
               </div>
             </div>
           </div>
