@@ -13,7 +13,23 @@ type EligibleCustomer = {
   first_name: string | null
   last_name: string | null
   email: string | null
+  phone: string | null
   created_at: string | null
+}
+
+type AudienceType =
+  | 'all_eligible'
+  | 'has_email'
+  | 'has_phone'
+  | 'booked_within'
+  | 'not_booked_since'
+  | 'created_within'
+
+type AudienceFilters = {
+  type?: AudienceType
+  startDate?: string
+  endDate?: string
+  sinceDate?: string
 }
 
 type CampaignRecipientInsert = {
@@ -77,6 +93,161 @@ function compareCustomersForCanonical(a: EligibleCustomer, b: EligibleCustomer) 
   }
 
   return a.id.localeCompare(b.id)
+}
+
+function isDateOnly(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+}
+
+function startOfDateUtc(value: string) {
+  return `${value}T00:00:00.000Z`
+}
+
+function nextDateUtc(value: string) {
+  const date = new Date(`${value}T00:00:00.000Z`)
+  date.setUTCDate(date.getUTCDate() + 1)
+  return date.toISOString()
+}
+
+function parseAudience(
+  audienceType: unknown,
+  audienceFilters: unknown
+): { ok: true; audienceType: AudienceType; audienceFilters: AudienceFilters } | { ok: false; message: string } {
+  if (
+    audienceType !== 'all_eligible' &&
+    audienceType !== 'has_email' &&
+    audienceType !== 'has_phone' &&
+    audienceType !== 'booked_within' &&
+    audienceType !== 'not_booked_since' &&
+    audienceType !== 'created_within'
+  ) {
+    return { ok: false, message: 'Invalid campaign audience type.' }
+  }
+
+  const filters = audienceFilters && typeof audienceFilters === 'object'
+    ? (audienceFilters as AudienceFilters)
+    : {}
+
+  if (audienceType === 'all_eligible' || audienceType === 'has_email' || audienceType === 'has_phone') {
+    return {
+      ok: true,
+      audienceType,
+      audienceFilters: { type: audienceType },
+    }
+  }
+
+  if (audienceType === 'booked_within' || audienceType === 'created_within') {
+    if (!isDateOnly(filters.startDate) || !isDateOnly(filters.endDate)) {
+      return { ok: false, message: `${audienceType} requires startDate and endDate.` }
+    }
+
+    return {
+      ok: true,
+      audienceType,
+      audienceFilters: {
+        type: audienceType,
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+      },
+    }
+  }
+
+  if (!isDateOnly(filters.sinceDate)) {
+    return { ok: false, message: 'not_booked_since requires sinceDate.' }
+  }
+
+  return {
+    ok: true,
+    audienceType,
+    audienceFilters: {
+      type: audienceType,
+      sinceDate: filters.sinceDate,
+    },
+  }
+}
+
+async function resolveAudienceCustomers(params: {
+  tenantId: string
+  audienceType: AudienceType
+  audienceFilters: AudienceFilters
+}) {
+  const baseQuery = supabaseAdmin
+    .from('customers')
+    .select('id, first_name, last_name, email, phone, created_at')
+    .eq('tenant_id', params.tenantId)
+
+  if (params.audienceType === 'all_eligible') {
+    return baseQuery
+  }
+
+  if (params.audienceType === 'has_email') {
+    return baseQuery.not('email', 'is', null)
+  }
+
+  if (params.audienceType === 'has_phone') {
+    return baseQuery.not('phone', 'is', null)
+  }
+
+  if (params.audienceType === 'created_within') {
+    return baseQuery
+      .gte('created_at', startOfDateUtc(params.audienceFilters.startDate!))
+      .lt('created_at', nextDateUtc(params.audienceFilters.endDate!))
+  }
+
+  if (params.audienceType === 'booked_within') {
+    const { data: bookingRows, error: bookingErr } = await supabaseAdmin
+      .from('bookings')
+      .select('customer_id')
+      .eq('tenant_id', params.tenantId)
+      .gte('starts_at', startOfDateUtc(params.audienceFilters.startDate!))
+      .lt('starts_at', nextDateUtc(params.audienceFilters.endDate!))
+      .not('customer_id', 'is', null)
+
+    if (bookingErr) {
+      return { data: null, error: bookingErr }
+    }
+
+    const customerIds = Array.from(
+      new Set((bookingRows ?? []).map(row => row.customer_id).filter((value): value is string => typeof value === 'string' && value.length > 0))
+    )
+
+    if (customerIds.length === 0) {
+      return { data: [], error: null }
+    }
+
+    return baseQuery.in('id', customerIds)
+  }
+
+  const { data: recentBookingRows, error: recentBookingErr } = await supabaseAdmin
+    .from('bookings')
+    .select('customer_id')
+    .eq('tenant_id', params.tenantId)
+    .gte('starts_at', startOfDateUtc(params.audienceFilters.sinceDate!))
+    .not('customer_id', 'is', null)
+
+  if (recentBookingErr) {
+    return { data: null, error: recentBookingErr }
+  }
+
+  const excludedIds = Array.from(
+    new Set((recentBookingRows ?? []).map(row => row.customer_id).filter((value): value is string => typeof value === 'string' && value.length > 0))
+  )
+
+  if (excludedIds.length === 0) {
+    return baseQuery
+  }
+
+  const { data: customers, error: customerErr } = await baseQuery
+
+  if (customerErr) {
+    return { data: null, error: customerErr }
+  }
+
+  const excludedIdSet = new Set(excludedIds)
+  return {
+    data: (customers ?? []).filter(row => !excludedIdSet.has(row.id)),
+    error: null,
+  }
 }
 
 async function getAuthedTenant(req: NextRequest) {
@@ -149,7 +320,9 @@ export async function POST(req: NextRequest) {
       subject,
       message_body,
       cta_url,
-      cta_label
+      cta_label,
+      audience_type,
+      audience_filters
     `)
     .eq('id', campaignId)
     .eq('tenant_id', auth.tenantId)
@@ -172,6 +345,11 @@ export async function POST(req: NextRequest) {
     return bad('Only email campaigns are supported in this MVP.', 400)
   }
 
+  const audience = parseAudience(campaign.audience_type, campaign.audience_filters)
+  if (audience.ok === false) {
+    return bad(audience.message, 400)
+  }
+
   const [
     { data: tenantRow, error: tenantErr },
     { data: customerRows, error: customerErr },
@@ -181,11 +359,11 @@ export async function POST(req: NextRequest) {
       .select('name, business_settings(email)')
       .eq('id', auth.tenantId)
       .single(),
-    supabaseAdmin
-      .from('customers')
-      .select('id, first_name, last_name, email, created_at')
-      .eq('tenant_id', auth.tenantId)
-      .not('email', 'is', null),
+    resolveAudienceCustomers({
+      tenantId: auth.tenantId,
+      audienceType: audience.audienceType,
+      audienceFilters: audience.audienceFilters,
+    }),
   ])
 
   if (tenantErr || !tenantRow) {
@@ -198,7 +376,8 @@ export async function POST(req: NextRequest) {
     return bad('Failed to load customers.', 500)
   }
 
-  const emailCandidates = (customerRows ?? []).filter(
+  const baseAudienceCustomers = (customerRows ?? []) as EligibleCustomer[]
+  const emailCandidates = baseAudienceCustomers.filter(
     (row): row is EligibleCustomer => typeof row.email === 'string' && row.email.trim().length > 0
   )
 
@@ -251,11 +430,17 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  console.log('[campaigns/send] dedupe summary:', {
+  console.log('[campaigns/send] audience summary:', {
+    audienceType: audience.audienceType,
+    baseAudienceCount: baseAudienceCustomers.length,
     totalCustomerRowsConsidered: emailCandidates.length,
     dedupedRecipientCount: dedupedEligibleCustomers.length,
     suppressedByOptOutCount,
   })
+
+  if (dedupedEligibleCustomers.length === 0) {
+    return bad('This campaign audience has no eligible email recipients.', 400)
+  }
 
   const recipientInserts: CampaignRecipientInsert[] = dedupedEligibleCustomers.map(customer => ({
     tenant_id: auth.tenantId,
