@@ -298,6 +298,27 @@ async function getAuthedTenant(req: NextRequest) {
   }
 }
 
+async function markCampaignFailed(params: {
+  tenantId: string
+  campaignId: string
+  reason: string
+}) {
+  const { error } = await supabaseAdmin
+    .from('campaigns')
+    .update({ status: 'failed' })
+    .eq('id', params.campaignId)
+    .eq('tenant_id', params.tenantId)
+
+  if (error) {
+    console.error('[campaigns/send] failed to mark campaign failed:', {
+      tenantId: params.tenantId,
+      campaignId: params.campaignId,
+      reason: params.reason,
+      error: error.message,
+    })
+  }
+}
+
 export async function POST(req: NextRequest) {
   const auth = await getAuthedTenant(req)
   if (auth.error) return auth.error
@@ -311,6 +332,12 @@ export async function POST(req: NextRequest) {
 
   const { data: campaign, error: campaignErr } = await supabaseAdmin
     .from('campaigns')
+    .update({
+      status: 'sending',
+    })
+    .eq('id', campaignId)
+    .eq('tenant_id', auth.tenantId)
+    .eq('status', 'draft')
     .select(`
       id,
       tenant_id,
@@ -324,21 +351,15 @@ export async function POST(req: NextRequest) {
       audience_type,
       audience_filters
     `)
-    .eq('id', campaignId)
-    .eq('tenant_id', auth.tenantId)
     .maybeSingle()
 
   if (campaignErr) {
-    console.error('[campaigns/send] failed to load campaign:', campaignErr.message)
-    return bad('Failed to load campaign.', 500)
+    console.error('[campaigns/send] failed to acquire send lock:', campaignErr.message)
+    return bad('Failed to start campaign send.', 500)
   }
 
   if (!campaign) {
-    return bad('Campaign not found.', 404)
-  }
-
-  if (campaign.status !== 'draft') {
-    return bad('Only draft campaigns can be sent.', 400)
+    return bad('Campaign is already sending or has already been sent.', 409)
   }
 
   if (campaign.channel !== 'email') {
@@ -368,11 +389,21 @@ export async function POST(req: NextRequest) {
 
   if (tenantErr || !tenantRow) {
     console.error('[campaigns/send] failed to load tenant:', tenantErr?.message)
+    await markCampaignFailed({
+      tenantId: auth.tenantId,
+      campaignId: campaign.id,
+      reason: 'tenant_load_failed',
+    })
     return bad('Failed to load tenant.', 500)
   }
 
   if (customerErr) {
     console.error('[campaigns/send] failed to load customers:', customerErr.message)
+    await markCampaignFailed({
+      tenantId: auth.tenantId,
+      campaignId: campaign.id,
+      reason: 'customer_load_failed',
+    })
     return bad('Failed to load customers.', 500)
   }
 
@@ -395,6 +426,11 @@ export async function POST(req: NextRequest) {
 
     if (optOutErr) {
       console.error('[campaigns/send] failed to load email opt-outs:', optOutErr.message)
+      await markCampaignFailed({
+        tenantId: auth.tenantId,
+        campaignId: campaign.id,
+        reason: 'opt_out_load_failed',
+      })
       return bad('Failed to load customer opt-outs.', 500)
     }
 
@@ -463,6 +499,11 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       console.error('[campaigns/send] failed to create campaign recipients:', error.message)
+      await markCampaignFailed({
+        tenantId: auth.tenantId,
+        campaignId: campaign.id,
+        reason: 'recipient_insert_failed',
+      })
       return bad('Failed to prepare campaign recipients.', 500)
     }
 
@@ -659,6 +700,11 @@ export async function POST(req: NextRequest) {
 
     if (eventErr) {
       console.error('[campaigns/send] failed to insert campaign events:', eventErr.message)
+      await markCampaignFailed({
+        tenantId: auth.tenantId,
+        campaignId: campaign.id,
+        reason: 'event_insert_failed',
+      })
       return bad('Failed to record campaign send events.', 500)
     }
   }
@@ -673,7 +719,7 @@ export async function POST(req: NextRequest) {
       recipient_count: recipientCount,
       delivered_count: deliveredCount,
       failed_count: failedCount,
-      status: 'sent',
+      status: deliveredCount > 0 ? 'sent' : 'failed',
       sent_at: nowIso,
     })
     .eq('id', campaign.id)
@@ -681,6 +727,11 @@ export async function POST(req: NextRequest) {
 
   if (campaignUpdateErr) {
     console.error('[campaigns/send] failed to update campaign stats:', campaignUpdateErr.message)
+    await markCampaignFailed({
+      tenantId: auth.tenantId,
+      campaignId: campaign.id,
+      reason: 'campaign_finalize_failed',
+    })
     return bad('Failed to finalize campaign send.', 500)
   }
 
