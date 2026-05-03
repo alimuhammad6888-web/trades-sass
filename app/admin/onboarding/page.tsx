@@ -84,6 +84,8 @@ export default function AdminOnboardingPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [statusSaving, setStatusSaving] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [createSaving, setCreateSaving] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState('')
 
   function loadRequests(key: string) {
     setLoading(true)
@@ -136,6 +138,57 @@ export default function AdminOnboardingPage() {
     () => requests.find(request => request.id === selectedId) ?? null,
     [requests, selectedId]
   )
+
+  async function createTenantAndInvite() {
+    if (!selected) return
+
+    const adminKey = getAdminKey()
+    if (!adminKey) {
+      setAuthError(true)
+      return
+    }
+
+    setCreateSaving(selected.id)
+    setError('')
+    setSuccessMessage('')
+
+    try {
+      const res = await fetch('/api/admin/onboarding/create-tenant', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-key': adminKey,
+        },
+        body: JSON.stringify({
+          onboardingRequestId: selected.id,
+        }),
+      })
+
+      const data = await res.json().catch(() => null)
+
+      if (res.status === 401) {
+        setAuthError(true)
+        sessionStorage.removeItem('admin_key')
+        setCreateSaving(null)
+        return
+      }
+
+      if (!res.ok) {
+        setError(data?.error ?? 'Failed to create tenant and invite owner.')
+        setCreateSaving(null)
+        return
+      }
+
+      setSuccessMessage('Tenant created and owner invite sent.')
+      loadRequests(adminKey)
+    } catch {
+      setError('Network error. Please try again.')
+      setCreateSaving(null)
+      return
+    }
+
+    setCreateSaving(null)
+  }
 
   async function updateStatus(nextStatus: string) {
     if (!selected) return
@@ -248,6 +301,12 @@ export default function AdminOnboardingPage() {
           </div>
         )}
 
+        {successMessage && (
+          <div style={{ marginBottom: '16px', background: '#1a2a1a', border: `1px solid ${BORDER}`, color: '#4ade80', borderRadius: '8px', padding: '12px 14px', fontSize: '13px' }}>
+            {successMessage}
+          </div>
+        )}
+
         <div className="admin-onboarding-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 430px) minmax(0, 1fr)', gap: '18px', alignItems: 'start' }}>
           <div style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: '8px', overflow: 'hidden' }}>
             <div style={{ padding: '14px 18px', borderBottom: `1px solid ${BORDER}`, fontSize: '13px', fontWeight: 700, color: Y, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -351,19 +410,33 @@ export default function AdminOnboardingPage() {
 
                       <button
                         type="button"
-                        disabled
+                        onClick={createTenantAndInvite}
+                        disabled={
+                          createSaving === selected.id ||
+                          statusSaving === selected.id ||
+                          !selected ||
+                          !['reviewing', 'approved'].includes(selected.status) ||
+                          Boolean(selected.tenant_id)
+                        }
                         style={{
                           padding: '10px 14px',
                           borderRadius: '6px',
-                          border: `1px solid ${BORDER}`,
-                          background: '#111',
-                          color: '#666',
+                          border: 'none',
+                          background: Y,
+                          color: '#000',
                           fontSize: '12px',
                           fontWeight: 700,
-                          cursor: 'not-allowed',
+                          cursor: createSaving === selected.id || selected.tenant_id ? 'not-allowed' : 'pointer',
+                          opacity: (
+                            createSaving === selected.id ||
+                            statusSaving === selected.id ||
+                            !selected ||
+                            !['reviewing', 'approved'].includes(selected.status) ||
+                            Boolean(selected.tenant_id)
+                          ) ? 0.65 : 1,
                         }}
                       >
-                        Create tenant + invite owner — coming next
+                        {selected.tenant_id ? 'Tenant already created' : createSaving === selected.id ? 'Creating tenant + sending invite...' : 'Create tenant + invite owner'}
                       </button>
                     </div>
                   </div>
